@@ -1,0 +1,12 @@
+[package]
+name = "rustls-quic-poc"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+rustls = { git = "https://github.com/rustls/rustls", rev = "bd9f7f59aa79" }
+rustls-ring = { git = "https://github.com/rustls/rustls", rev = "bd9f7f59aa79" }
+rustls-test = { git = "https://github.com/rustls/rustls", rev = "bd9f7f59aa79" }
+
+[profile.release]
+debug = true

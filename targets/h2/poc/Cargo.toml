@@ -1,0 +1,20 @@
+[package]
+name = "h2-zerolen-data-poc"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+h2 = { git = "https://github.com/hyperium/h2", rev = "9416dc875da6d6b900eedc22636413c62dae912b", features = ["stream", "unstable"] }
+h2-support = { git = "https://github.com/hyperium/h2", rev = "9416dc875da6d6b900eedc22636413c62dae912b" }
+
+hyper = { version = "1", features = ["client", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio", "client-legacy", "http2"] }
+http-body-util = "0.1"
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "time"] }
+futures = "0.3"
+http = "1"
+bytes = "1"
+
+[profile.release]
+debug = true

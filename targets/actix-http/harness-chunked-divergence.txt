@@ -1,0 +1,25 @@
+==== CHUNK-CTRL compliant 0-terminator + pipelined request (baseline)
+  RFC-9112 expectation: '0\r\n\r\n' ends body; trailing GET is a legit pipelined request
+  actix req1: POST /cc HTTP/1.1  |  TE-header=Some("chunked") CL-header=None  |  consumed 58B, remaining 37B
+  actix body: framed as none/empty, 0B, then EOF. remaining 32B -> decoding trailer...
+  >>> trailing request decoded from remainder: GET /LEGIT HTTP/1.1   (== SMUGGLED iff the chunk terminator above was non-RFC)
+
+==== CHUNK-DIGITLESS  bare CRLF as chunk-size line, then smuggled request
+  RFC-9112 expectation: digit-less chunk-size is invalid (1*HEXDIG) -> strict peer 400s; trailing GET is NOT a request
+  actix req1: POST /cd HTTP/1.1  |  TE-header=Some("chunked") CL-header=None  |  consumed 58B, remaining 49B
+  actix body: framed as none/empty, 0B, then EOF. remaining 45B -> decoding trailer...
+  >>> trailing request decoded from remainder: GET /SMUGGLED_DIGITLESS HTTP/1.1   (== SMUGGLED iff the chunk terminator above was non-RFC)
+
+==== CHUNK-WS  real chunk then WHITESPACE-only size line as terminator, then smuggled request
+  RFC-9112 expectation: ' \r\n' is not a valid chunk-size; strict peer keeps reading / 400s; body should not end here
+  actix req1: POST /cw HTTP/1.1  |  TE-header=Some("chunked") CL-header=None  |  consumed 58B, remaining 53B
+  actix body: framed as body(chunk/length), 5B, then EOF. remaining 38B -> decoding trailer...
+  >>> trailing request decoded from remainder: GET /SMUGGLED_WS HTTP/1.1   (== SMUGGLED iff the chunk terminator above was non-RFC)
+
+==== CHUNK-EXT-ONLY  ';ext' with no hex digit as size line, then smuggled request
+  RFC-9112 expectation: ';' before any hex digit is invalid; strict peer rejects; body should not terminate here
+  actix req1: POST /ce HTTP/1.1  |  TE-header=Some("chunked") CL-header=None  |  consumed 58B, remaining 47B
+  actix body: framed as none/empty, 0B, then EOF. remaining 39B -> decoding trailer...
+  >>> trailing request decoded from remainder: GET /SMUGGLED_EXT HTTP/1.1   (== SMUGGLED iff the chunk terminator above was non-RFC)
+
+TEST-EXIT=0

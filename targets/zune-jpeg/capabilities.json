@@ -1,0 +1,13 @@
+{
+  "capabilities": {
+    "untrusted_deserialization": {"present": "yes", "evidence": "JpegDecoder::decode() parses fully attacker-controlled JPEG bytes (markers, DHT/DQT tables, entropy-coded MCUs)"},
+    "network_protocol_parser": {"present": "yes", "evidence": "byte-format parser over a strongly-adversarial container (baseline/progressive, YCbCr/CMYK, arbitrary subsampling)"},
+    "unsafe_simd": {"present": "yes", "evidence": "unsafe_utils_avx2.rs / unsafe_utils_neon.rs + idct/avx2 + upsampler/avx2 + color_convert/avx — pointer/slice arithmetic in SIMD kernels"},
+    "inbound_c_abi": {"present": "no", "evidence": "grep extern \"C\" empty — pure Rust API"},
+    "outbound_ffi": {"present": "no", "evidence": "no bindgen/-sys deps; only zune-core (pure Rust)"},
+    "concurrency_async": {"present": "no", "evidence": "single-threaded decode; no rayon/threads in the decode path"},
+    "crypto_secrets": {"present": "no", "evidence": "image decoder — no secrets/crypto"},
+    "multi_tenant_authz": {"present": "no", "evidence": "library, no auth surface"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "JpegDecoder::new + decode are the crate's public API; the fuzz/riptarget entry drives exactly them"}
+}

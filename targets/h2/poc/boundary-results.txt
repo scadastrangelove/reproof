@@ -1,0 +1,22 @@
+==== TEST A: h2 client, DEFAULT config (push enabled by default)
+  [wire] h2 client SETTINGS: enable_push = None   (None/Some(true) => push allowed)
+  [wire] sent response + PUSH_PROMISE(1 -> 2)
+  [wire] sent 1xx #1 on promised stream 2
+  [wire] sent 1xx #2 on promised stream 2  <-- expected to trip the assert
+
+thread 'tokio-rt-worker' panicked at .../src/proto/streams/counts.rs:111:9:
+assertion failed: !stream.is_counted
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  >>> TEST A: CLIENT CONNECTION PANICKED (bug reproduced)
+
+==== TEST B: SAME malicious sequence, victim = hyper HTTP/2 client
+  [wire] hyper client SETTINGS: enable_push = Some(false)   (Some(false) => gate closed)
+  [wire] sent PUSH_PROMISE(1 -> 2) despite client disabling push
+  [wire] sent 1xx #1 and #2 on promised stream 2
+  >>> TEST B: no panic — hyper rejected the push before the assert
+
+==== RESULT
+  A: h2 default-config client panicked   = true
+  B: hyper advertised ENABLE_PUSH        = Some(false)
+  B: hyper panicked                      = false
+  => Bug real in h2's default config; the hyper boundary holds (push disabled).

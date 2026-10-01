@@ -1,0 +1,13 @@
+diff --git a/src/time.rs b/src/time.rs
+index 254a259..f91b780 100644
+--- a/src/time.rs
++++ b/src/time.rs
+@@ -197,7 +197,7 @@ impl Add<Duration> for ASN1Time {
+ 
+     #[inline]
+     fn add(self, rhs: Duration) -> Option<ASN1Time> {
+-        Some(ASN1Time::new(self.time + rhs))
++        self.time.checked_add(rhs).map(ASN1Time::new)
+     }
+ }
+ 

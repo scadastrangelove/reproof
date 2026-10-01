@@ -1,0 +1,10 @@
+==== CONTROL: Finished flight and first request fed as two SEPARATE process()/read() calls
+  server reached Complete after the Finished-only call
+  separate request flight: 56B, fed as its own read() call
+  >>> CONTROL OK: request DELIVERED via split.receive.read(): "GET /control HTTP/1.1\r\nHost: x\r\n\r\n"
+==== ATTACK: Finished flight + first request CONCATENATED into ONE process() call
+  client final handshake flight: 64B, subsequent request flight: 55B
+  combined buffer fed to a single NeedsInput::process() call: 119B
+  server reached Complete from the single combined call (as the finding predicts)
+  >>> CONFIRMED: split.receive.read() has NOTHING to deliver -- the request was silently dropped during the combined process() call. The server is now waiting for a request that will never (fully) arrive, while the client believes it already sent one.
+TEST-EXIT=0

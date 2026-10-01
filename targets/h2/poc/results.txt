@@ -1,0 +1,30 @@
+### native h2 differential (main) ###
+h2 zero-length DATA flow-control bypass — native h2 client, default 65535 window
+
+  ARM 1 payload DATA : sent 64 frames of 16384B -> GOAWAY(flow-control)=true, recv-buffer RSS +1200 KB
+
+  ARM 2  0-byte DATA :   200000 frames | recv-buffer RSS +23984 KB (peak +23984)
+  ARM 2  0-byte DATA :   400000 frames | recv-buffer RSS +39328 KB (peak +39328)
+  ARM 2  0-byte DATA :   600000 frames | recv-buffer RSS +40752 KB (peak +40752)
+  ARM 2  0-byte DATA :   800000 frames | recv-buffer RSS +72192 KB (peak +72192)
+  ARM 2  0-byte DATA :  1000000 frames | recv-buffer RSS +39424 KB (peak +72192)
+  ARM 2  0-byte DATA : sent 1000000 frames of 0B -> GOAWAY(flow-control)=false, recv-buffer RSS +72192 KB
+
+==== RESULT
+  payload 1 MiB  : GOAWAY(flow-control) = true   (window bounds a payload flood)
+  0-byte x 1e6   : GOAWAY(flow-control) = false, recv-buffer +72192 KB   (never bounded)
+  => CONFIRMED: payload is bounded by flow control (GOAWAY); zero-length DATA bypasses it
+     entirely -> unbounded recv-buffer growth, ~74 buffered bytes per 9-byte frame (~8x).
+
+### flow-control enforcement diagnostic (diag) ###
+client SETTINGS: initial_window_size = None
+sent 64 x 16KiB = 1 MiB of DATA to a non-reading client (window is 65535)
+
+== client reaction to 1 MiB over a 65535 window ==
+  WINDOW_UPDATE (conn):   0
+  WINDOW_UPDATE (stream): 0
+  WINDOW_UPDATE bytes:    0
+  GOAWAY (FLOW_CONTROL?): true
+  RST_STREAM:             false
+  => ENFORCED: the client FLOW_CONTROL_ERRORs the overrun -> payload IS bounded; then a
+     zero-length flood (which never touches the window) is the real bypass.

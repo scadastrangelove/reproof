@@ -1,0 +1,13 @@
+{
+  "capabilities": {
+    "network_protocol_parser": {"present": "yes", "evidence": "HTTP/1.x wire-format parser over raw socket bytes (Request/Response::parse)"},
+    "untrusted_deserialization": {"present": "yes", "evidence": "parse turns fully attacker-controlled bytes into typed request line + headers"},
+    "unsafe_simd": {"present": "yes", "evidence": "simd/{avx2,sse42,neon}.rs hand-written intrinsics + unsafe byte cursor iter.rs, runtime-dispatched"},
+    "inbound_c_abi": {"present": "no", "evidence": "pure-Rust API, no extern C"},
+    "outbound_ffi": {"present": "no", "evidence": "std-only, no deps"},
+    "concurrency_async": {"present": "no", "evidence": "single-threaded parse over borrowed slice"},
+    "crypto_secrets": {"present": "no", "evidence": "no secret handling"},
+    "multi_tenant_authz": {"present": "no", "evidence": "library, no auth surface"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "Request::parse/Response::parse are the crate's primary public entry; the fuzz/riptarget drive them directly"}
+}

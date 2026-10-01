@@ -1,0 +1,13 @@
+{
+  "capabilities": {
+    "untrusted_deserialization": {"present": "yes", "evidence": "read_event + serde de/ turn attacker XML into events/typed structs"},
+    "network_protocol_parser": {"present": "yes", "evidence": "wire-format XML parser over strongly-adversarial input (SOAP/RSS/config/docx)"},
+    "unsafe_simd": {"present": "no", "evidence": "no SIMD; only escape.rs byte/char indexing (mostly NOTE-comments)"},
+    "inbound_c_abi": {"present": "no", "evidence": "pure-Rust API"},
+    "outbound_ffi": {"present": "no", "evidence": "std-only default build"},
+    "concurrency_async": {"present": "no", "evidence": "sync default; async-tokio opt-in"},
+    "crypto_secrets": {"present": "no", "evidence": "no secrets"},
+    "multi_tenant_authz": {"present": "no", "evidence": "library"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "Reader::read_event is the primary public entry; fuzz/riptarget drive it"}
+}

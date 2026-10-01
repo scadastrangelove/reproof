@@ -1,0 +1,9 @@
+==== PoC#1: non-char-boundary slice panic in connection_type()
+  NO PANIC: request decoded normally: GET / (finding REFUTED as stated, or byte layout wrong)
+
+==== PoC#2: Inner::consumed never resets -> spurious TooLarge on valid keep-alive traffic
+  Phase A: 1261 complete valid requests processed, ~65572B of header bytes consumed (> 65536B MAX_BUF), each individually accepted with no error.
+  >>> Phase B: partial, perfectly ordinary 30B request REJECTED: TooLarge(65602)
+      (Inner::consumed carried 65572B+ from Phase A's ALREADY-COMPLETED requests into this unrelated in-progress read — spurious TooLarge / forced disconnect on legitimate traffic)
+
+TEST-EXIT=0

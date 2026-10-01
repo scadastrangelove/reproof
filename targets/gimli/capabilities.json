@@ -1,0 +1,13 @@
+{
+  "capabilities": {
+    "untrusted_deserialization": {"present": "yes", "evidence": "parses attacker-controlled DWARF sections (DIEs, abbrev, line, CFI, DWARF expressions) into typed structures"},
+    "network_protocol_parser": {"present": "yes", "evidence": "byte-format parser over the strongly-adversarial DWARF wire format"},
+    "unsafe_simd": {"present": "no", "evidence": "no SIMD; gimli is near-all safe Rust"},
+    "inbound_c_abi": {"present": "no", "evidence": "pure-Rust API"},
+    "outbound_ffi": {"present": "no", "evidence": "no -sys/FFI deps in the read path"},
+    "concurrency_async": {"present": "no", "evidence": "single-threaded parse over borrowed slices"},
+    "crypto_secrets": {"present": "no", "evidence": "no secret handling"},
+    "multi_tenant_authz": {"present": "no", "evidence": "library, no auth surface"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "EhFrame/DebugInfo parse + UnwindTable/Evaluation are public; the fuzz/riptarget drive them directly"}
+}

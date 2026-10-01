@@ -1,0 +1,24 @@
+[package]
+name = "zune-jpeg-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+zune-jpeg = { path = ".." }
+
+# L10/P0.1: production profile — overflow-checks OFF so crashes are production-real.
+[profile.release]
+debug = 1
+overflow-checks = false
+debug-assertions = false
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false

@@ -1,0 +1,193 @@
+RUST SECURITY REVIEW — additional categories (appended to the /vuln-scan brief).
+Use with:  /vuln-scan <dir> --extra profiles/rust/scan-extras.txt
+
+CONTEXT. Rust's borrow checker eliminates most memory-safety bugs in SAFE code.
+Real Rust vulnerabilities concentrate in four places: (1) `unsafe`/FFI blocks,
+(2) panics reachable from untrusted input (availability), (3) parsers /
+deserializers that trust internal offsets after an integrity check, and (4)
+release-only behavior that debug builds hide. Hunt those. For EVERY finding,
+state the TRUST BOUNDARY explicitly: which inputs are attacker-controlled vs
+operator-controlled — severity is gated on it (see the "trust boundary" note at
+the end).
+
+  RUST MEMORY SAFETY — unsafe / FFI only — HIGH VALUE:
+  - Unchecked raw read/write at an untrusted-derived offset or length:
+    `ptr::read`/`read_unaligned`/`*ptr`/`get_unchecked`/`copy_nonoverlapping`/
+    `slice::from_raw_parts(ptr, n)` where the offset/index/`n` comes from a
+    deserialized field, a length header, or attacker input, WITHOUT a validating
+    bounds check against the real buffer. The canonical trap: an integrity check
+    (CRC / hash / signature / magic+version) proves the bytes are intact but NOT
+    that internal offsets/counts/indices are in-bounds. Trace every such read to
+    where its offset is validated; if it isn't, report it.
+  - Integer under/overflow feeding an index or pointer offset: `wrapping_sub`/
+    `wrapping_add`/`saturating_*` or `a - b` / `x as usize` on untrusted values
+    that then index memory (`slice[i]`, `.add(off)`, `get_unchecked`). An
+    underflow that wraps to a huge usize and is used unchecked is an OOB read.
+  - `mem::transmute` across types of different size/alignment/validity; casting
+    `&[u8]` to `&[T]` / `bytemuck`-style reinterpret without alignment + length
+    guarantees; constructing an invalid enum/bool/char via unsafe.
+  - Shift by an untrusted amount: `x << n` / `x >> n` where `n` can be >= the
+    bit width (panic in debug, silent mask in release → wrong index/state).
+  - A safety invariant enforced only by `debug_assert!` (compiled out in
+    release) rather than a real runtime check or a parse-time guarantee.
+  - `unsafe impl Send`/`unsafe impl Sync` on a type that isn't actually
+    thread-safe; `Send`-bypassing raw-pointer sharing across threads.
+  - Self-referential / lifetime-extended references built with unsafe that can
+    dangle; `MaybeUninit::assume_init` on partially-initialized data.
+
+  RUST AVAILABILITY / DoS — HIGH VALUE:
+  - Panic reachable from a public API on attacker-controlled input: `unwrap()`/
+    `expect()` on a fallible parse of untrusted data, `slice[i]` / `&slice[a..b]`
+    range indexing, `try_into().unwrap()`, `char::from_u32(...).unwrap()`,
+    or arithmetic overflow (with overflow-checks on) driven by an untrusted
+    length/offset/count. A panic across an FFI boundary (e.g. a C caller) is
+    UB, not just an abort — flag that as higher severity.
+  - Unbounded loop / recursion / allocation driven by an untrusted control
+    field: an interpreter/state-machine whose jump target, iteration count, or
+    terminator byte comes from the input; a linked-chain walk with a
+    data-controlled terminator and no length cap; `Vec::with_capacity(n)` /
+    `vec![x; n]` / `read_to_end` where `n` is an untrusted size header.
+
+  RUST DESERIALIZATION / PARSER TRUST — HIGH VALUE:
+  - A parser that validates a container's INTEGRITY (magic/version/length/CRC/
+    signature) and then treats internal offsets/counts/indices as in-bounds.
+    Integrity is not semantic validation. Every offset/length/index that a later
+    (esp. `unsafe`) hot path reads must be bounded against the buffer AT PARSE
+    TIME, or checked at use.
+  - A record/table sliced to the WHOLE input blob instead of its declared `size`,
+    letting a hostile record steer reads into a neighboring region that still
+    passes the integrity check (cross-record / cross-tenant disclosure).
+  - `serde`/`bincode`/`prost`/custom decoders that allocate or recurse based on
+    a length/count field before validating it against remaining input.
+
+  RUST-ADJACENT — note briefly:
+  - Dependency with a known-unsound API used in an unsafe way (don't just flag
+    "outdated dep" — flag the unsound USE).
+  - `catch_unwind` missing at an FFI boundary where the Rust side can panic.
+
+  RUDRA PATTERNS — unsafe code that trusts a CALLER's behavior — HIGH VALUE
+  (these are the classes a one-pass review misses most; from the Rudra analyzer,
+  SOSP'21). Memory-safety here needs NO byte input — the "input" is a trait impl:
+  - HIGHER-ORDER INVARIANT: `unsafe` code that trusts a caller-supplied trait
+    method to be truthful/consistent, when the type system does NOT guarantee it.
+    Classic: `Vec`/`SmallVec`/arena code that calls `iter.size_hint()` (or
+    `ExactSizeIterator::len()`) and `reserve`s / `ptr::write`s / `set_len`s on
+    that count — a `size_hint` that UNDER- or OVER-reports drives an OOB write or
+    a stale-pointer write after an in-loop realloc. Also `Ord`/`PartialOrd` that
+    is inconsistent, `Borrow` that returns different references, `Hash` that
+    varies — used to index/partition an `unsafe` buffer. TRACE: does any `unsafe`
+    length/offset/capacity come from a caller trait method with no post-check?
+  - PANIC SAFETY: `unsafe` code left in a temporarily-broken state across a call
+    that can PANIC — `ptr::read` has duplicated ownership (a later `drop` →
+    double-free), or `set_len(n)` ran before the `n` elements were initialized,
+    and then a user callback (`Clone::clone`, `Drop`, the iterator's `next`, a
+    closure) panics and unwinds through it → double-free / drop-of-uninitialized.
+    TRACE every `ptr::read`/`set_len`/`ManuallyDrop` and ask "if the next
+    user-controlled call panics here, what does the `Drop`/unwind do?".
+  - SEND/SYNC VARIANCE: `unsafe impl<T> Send for X<T>` / `Sync` with NO
+    `T: Send`/`T: Sync` (or weaker) bound, over a type holding `*mut T`/`*const T`/
+    `NonNull<T>`. An unconditional `Send`/`Sync` lets a non-thread-safe `T`
+    (`Rc`, `Cell`, a `!Send` handle) cross threads → data race / UAF. Compare the
+    impl's bounds against what the contained raw pointer actually requires. A
+    single-producer/consumer endpoint made `Sync` is the same bug.
+  (These survive R3 — a soundness hole in a public API is a real bug even if no
+  current caller triggers it, R8/R9. Dynamic confirmation = Miri under an
+  adversarial trait impl, see fuzzing.md.)
+
+DO NOT REPORT (Rust-specific false positives — skip even if technically present):
+  - An `unsafe` read whose index/offset IS bounded by a checked invariant
+    elsewhere — a preceding mask/exclusion, a parse-time validation, an enforced
+    zone/record size, or a proven caller contract. TRACE the invariant before
+    reporting; "unchecked read" alone is not a finding if the bound is
+    established upstream.
+  - Memory-safety concerns in 100% safe Rust with no `unsafe` and no FFI (the
+    borrow checker covers use-after-free / double-free / data races there).
+  - Panics reachable ONLY from operator-controlled config, CLI flags, env vars,
+    build scripts, or `#[cfg(test)]` / benches / examples.
+  - `debug_assert!`/`assert!` that is provably always-true given a caller
+    contract enforced at the trust boundary.
+  - Integer overflow that yields only a wrong value with NO memory/index/
+    allocation/security-decision consequence downstream.
+  - `unwrap()` on a value the code just constructed or proved `Some`/`Ok`
+    (e.g. `map.insert` then `map.get(k).unwrap()`), not on untrusted parse output.
+
+TRUST BOUNDARY (report this for every finding). Name the untrusted input(s)
+and, for each finding, whether it is reachable from ATTACKER-controlled data or
+only from OPERATOR-controlled / trusted-by-construction data (a
+compiler-emitted artifact, an operator-signed config, an internal-only DB). A
+memory-safety bug behind a purely operator-controlled input is a latent
+robustness bug, not a live vulnerability — say so and rank accordingly, but do
+NOT drop it (triage decides). This distinction is usually the single biggest
+driver of real-world severity.
+
+─────────────────────────────────────────────────────────────────────────────
+EXTENDED CATEGORIES (from the canonical Rust security review — full text at
+profiles/rust/references/rust-security-review.md). Same trust-boundary rule:
+name the attacker-controlled input for each. HIGH VALUE unless noted.
+
+  UNSAFE — deepen the audit (§2). For each unsafe site, the finding must name
+  which invariant is violable, not just "unchecked": alignment (`as_ptr()` on
+  `[u8]` is align-1; casting to `*const u64` does NOT make it align-8);
+  aliasing (`&mut` coexisting with other refs — Stacked/Tree Borrows / Miri);
+  validity (a `bool` from 2, uninit read, invalid `char`/`str`); panic-safety
+  (UB/leak if a panic unwinds through a temporarily-broken invariant, incl.
+  from a callback/Drop/alloc); ownership/double-free (`ManuallyDrop`/
+  `MaybeUninit`, drop order); Pin soundness (self-referential structs/futures,
+  `Unpin` only where structurally justified). "safe API, unsound internals" is
+  the canonical target — a safe fn whose contract safe code can break is a bug.
+
+  TYPE/SIZE CONVERSIONS (§4): `as` silently truncates / changes sign. Any
+  `x as u16/u32/usize` (or signed↔unsigned) on an attacker-influenced value that
+  then sizes an allocation, indexes, or forms a wire field is a finding — must be
+  `try_into()` with an error. Classic offset trap: `a + b < len` overflows;
+  `a < len - b` underflows when `b > len`.
+
+  COMMAND / FILE / PATH (§5): `Command` via `sh -c` / `cmd.exe` / `.bat` with
+  interpolated input = injection; path traversal (`../`, absolute, symlink,
+  TOCTOU) where a naive `starts_with` is not a path check; archive (zip/tar)
+  entry names are attacker-controlled (zip-slip); decompression without a
+  ratio/size cap (zip bomb).
+
+  AUTHORIZATION AT THE SIDE EFFECT (§6): the `load → modify → check` order (must
+  be `load → check → validate-transition → modify`); object/tenant ownership not
+  just role; a permission check reused after `.await`; mass assignment via
+  deserialization (service fields settable through JSON — want
+  `serde(deny_unknown_fields)`); check-then-write races.
+
+  FFI BOUNDARY (§7) — HIGH for anything replacing a C lib / running in a C host
+  (e.g. an nginx worker): a panic escaping across FFI into the host (crashes the
+  process — needs `catch_unwind` or `extern "C-unwind"`); a foreign exception
+  entering a non-unwind boundary (UB); wrong `extern` signature / ABI (transcribed
+  from memory not the header — UB); lengths/pointers from C used in
+  `slice::from_raw_parts` without null/length validation; allocator asymmetry
+  (freed by the side that didn't allocate); host-runtime lifecycle invariants
+  (refcounts, request lifetimes — e.g. nginx `r->main->count`) not upheld on every
+  exit path incl. errors.
+
+  CONCURRENCY / ASYNC (§8): `unsafe impl Send`/`Sync` that isn't actually
+  thread-safe; a mutex guard held across `.await`; cancellation safety (a future
+  dropped mid-`select!`/timeout leaving half-written state / unclosed resources);
+  `Ordering::Relaxed` in lock-free code without justification; blocking I/O
+  (`std::fs`, sync channels) on an async executor (starvation DoS); deadlock /
+  lock-ordering (not UB, not caught by the type system, but a real availability
+  bug).
+
+  PARSER DIFFERENTIALS (§9): if the same bytes are parsed twice (edge & upstream,
+  WAF & backend, two components normalizing a path/string differently), a
+  disagreement is a vulnerability class in itself (request smuggling, filter
+  bypass, permission-prompt spoofing). Report parse/normalization divergences,
+  not just crashes.
+
+  SECRETS / CRYPTO (§10): secrets leaking into `Debug`/`Display` (check the
+  derives), error chains, panic messages, tracing spans, metrics labels, query
+  strings; `==` comparison of a MAC/secret (needs constant-time `subtle`);
+  `SmallRng`/deterministic RNG for keys/tokens; missing nonce/IV uniqueness or
+  encryption without authentication (AEAD); hand-rolled crypto (auto-flag).
+
+  SUPPLY CHAIN (§11) — the agent may run these read-only static checks and fold
+  results in: `cargo audit` (RustSec advisories, yanked), `cargo deny check`
+  (policy), `cargo geiger` (unsafe map), `cargo tree -e features` (which features
+  are really on). A `build.rs` / proc-macro in a new dep executes at build time
+  → audit as executable code. Do NOT filter RustSec *informational soundness*
+  advisories — "safe API, unsound internals" is the class that becomes
+  exploitable after a refactor.

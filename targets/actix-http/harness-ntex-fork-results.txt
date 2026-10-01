@@ -1,0 +1,42 @@
+==== CTRL-A valid 1.1 chunked (no-FP)
+  RFC expectation: chunked body 'Hello', no trailing request
+  ntex req1: POST /a HTTP/1.1 | TE=Some("chunked") CL=None | PayloadType=Payload | consumed 57B remaining 15B
+  ntex body: 5B then EOF; remaining 0B
+  (no trailing request; remaining 0B)
+
+==== CTRL-B double Content-Length (hardening)
+  RFC expectation: REJECT (multiple Content-Length)
+  ntex req1 REJECTED: Header  (fail-closed)
+
+==== NTEX-1-GET  HTTP/1.0 + TE:chunked (GET, keep-alive) + trailing request  [actix rejects]
+  RFC expectation: TE on HTTP/1.0 must be rejected or chunk-decoded; trailing GET is NOT a new request
+  ntex req1: GET /c HTTP/1.0 | TE=Some("chunked") CL=None | PayloadType=None(no body) | consumed 80B remaining 40B
+  >>> trailing request decoded: GET /SMUGGLED_10TE HTTP/1.1   (== SMUGGLED iff body should have consumed it)
+
+==== NTEX-1-POST HTTP/1.0 + TE:chunked (POST)  [expect reject via 1.0-POST-no-CL]
+  RFC expectation: 1.0 POST without Content-Length -> reject
+  ntex req1 REJECTED: Header  (fail-closed)
+
+==== NTEX-2  TE:chunked + Content-Length (1.1)  [actix rejects]
+  RFC expectation: reject (both CL and TE) per RFC 9112 6.1
+  ntex req1 REJECTED: Header  (fail-closed)
+
+==== NTEX-3  TE:identity + Content-Length (1.1)  [actix rejects 'must be chunked']
+  RFC expectation: identity not a valid TE; actix rejects, does ntex accept & frame by CL?
+  ntex req1: POST /e HTTP/1.1 | TE=Some("identity") CL=Some("5") | PayloadType=Payload | consumed 77B remaining 33B
+  ntex body: 5B then EOF; remaining 28B
+  >>> trailing request decoded: GET /X HTTP/1.1   (== SMUGGLED iff body should have consumed it)
+
+==== NTEX-CHUNK-DIGITLESS  bare CRLF chunk-size line + smuggled request
+  RFC expectation: digit-less chunk-size invalid -> strict peer 400s
+  ntex req1: POST /cd HTTP/1.1 | TE=Some("chunked") CL=None | PayloadType=Payload | consumed 58B remaining 49B
+  ntex body: 0B then EOF; remaining 45B
+  >>> trailing request decoded: GET /SMUGGLED_DIGITLESS HTTP/1.1   (== SMUGGLED iff body should have consumed it)
+
+==== NTEX-CHUNK-WS  whitespace-only chunk-size terminator + smuggled request
+  RFC expectation: ' \r\n' invalid chunk-size
+  ntex req1: POST /cw HTTP/1.1 | TE=Some("chunked") CL=None | PayloadType=Payload | consumed 58B remaining 53B
+  ntex body: 5B then EOF; remaining 38B
+  >>> trailing request decoded: GET /SMUGGLED_WS HTTP/1.1   (== SMUGGLED iff body should have consumed it)
+
+TEST-EXIT=0

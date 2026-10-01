@@ -1,0 +1,144 @@
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+"""Tests for the §9 capabilities routing table (harness/capabilities.py)."""
+import json
+
+import pytest
+
+from reproof import capabilities as cap
+
+
+def _inv():
+    return cap.from_dict({
+        "capabilities": {
+            "untrusted_deserialization": {"present": "yes", "evidence": "serde"},
+            "unsafe_trait_trust": "yes",                       # shorthand string
+            "inbound_c_abi": {"present": "no", "evidence": "grep empty"},
+            "outbound_ffi": {"present": "test_only", "evidence": "oracle only"},
+            "brand_new_cap": {"present": "yes", "evidence": "forward-compat"},
+        },
+        "reachable_from_public_api": {"present": "no", "evidence": "lifted out of crate"},
+    })
+
+
+def test_present_and_active():
+    inv = _inv()
+    assert inv.is_active("untrusted_deserialization")
+    assert inv.is_active("unsafe_trait_trust")          # shorthand parsed
+    assert not inv.is_active("inbound_c_abi")           # no
+    assert inv.is_active("outbound_ffi")                # test_only == active
+    assert inv.is_active("brand_new_cap")               # unknown-but-present == active
+    assert inv.present("multi_tenant_authz") == "no"    # absent == no
+
+
+def test_gates_and_sanitizer_matrix():
+    inv = _inv()
+    gate_caps = {g.capability for g in inv.active_gates()}
+    # active but unmapped key is omitted from gates (nothing to enable yet)
+    assert "brand_new_cap" not in gate_caps
+    assert "unsafe_trait_trust" in gate_caps
+    assert "miri" in inv.sanitizers() and "asan" in inv.sanitizers()
+    g = cap.gates_for("unsafe_trait_trust")
+    assert g.sanitizer == "miri" and g.fuzz_rung == "adversarial_trait_impl"
+    assert cap.gates_for("reachable_from_public_api") is None   # axis, not a gate
+
+
+def test_skips_paper_trail():
+    inv = _inv()
+    assert ("inbound_c_abi", "grep empty") in inv.skips()
+
+
+def test_reachability_axis():
+    assert _inv().reachable_from_public_api() == "no"
+    # absent axis defaults to unknown (only down-rank on an explicit 'no')
+    bare = cap.from_dict({"capabilities": {"unsafe_simd": "yes"}})
+    assert bare.reachable_from_public_api() == "unknown"
+
+
+def test_bad_present_rejected():
+    with pytest.raises(cap.CapabilityError):
+        cap.from_dict({"capabilities": {"x": {"present": "maybe"}}})
+
+
+def test_flat_layout_tolerated():
+    inv = cap.from_dict({
+        "unsafe_simd": {"present": "yes", "evidence": "core::arch"},
+        "reachable_from_public_api": {"present": "yes", "evidence": "public parse()"},
+    })
+    assert inv.is_active("unsafe_simd")
+    assert inv.reachable_from_public_api() == "yes"
+
+
+def test_roundtrip():
+    inv = _inv()
+    inv2 = cap.from_dict(inv.to_dict())
+    assert inv2.active_capabilities() == inv.active_capabilities()
+    assert inv2.reachable_from_public_api() == "no"
+
+
+def test_load_and_load_optional(tmp_path):
+    p = tmp_path / "capabilities.json"
+    p.write_text(json.dumps({"capabilities": {"unsafe_simd": {"present": "yes", "evidence": "x"}}}))
+    assert cap.load(p).is_active("unsafe_simd")
+    assert cap.load_optional(None) is None
+    assert cap.load_optional(tmp_path / "missing.json") is None
+    with pytest.raises(cap.CapabilityError):
+        cap.load(tmp_path / "missing.json")
+
+
+def test_vote_budget_per_class():
+    # high-variance Rudra classes get 8; stable parsers 3; unknown → default 5
+    assert cap.vote_budget("unsafe_trait_trust") == 8
+    assert cap.vote_budget("unsafe_generic_soundness") == 8
+    assert cap.vote_budget("untrusted_deserialization") == 3
+    assert cap.vote_budget("concurrency_async") == 3        # races were 3/3
+    assert cap.vote_budget("nonexistent") == cap.DEFAULT_VOTE_BUDGET == 5
+
+
+def test_inventory_vote_budget_is_max_over_active():
+    inv = cap.from_dict({"capabilities": {
+        "unsafe_trait_trust": "yes", "untrusted_deserialization": "yes"}})
+    assert inv.vote_budget() == 8                            # max(8, 3)
+    inv2 = cap.from_dict({"capabilities": {"untrusted_deserialization": "yes"}})
+    assert inv2.vote_budget() == 3
+    assert cap.from_dict({"capabilities": {}}).vote_budget() == 5   # none active → default
+    # a present==no capability does not count toward the budget
+    inv3 = cap.from_dict({"capabilities": {
+        "unsafe_trait_trust": {"present": "no", "evidence": "grep empty"},
+        "untrusted_deserialization": "yes"}})
+    assert inv3.vote_budget() == 3
+
+
+def test_run_crash_track_byte_surface_yes():
+    # A parser/deser target has a byte-fuzz rung (sanitizer != none) → run it.
+    inv = cap.from_dict({"capabilities": {"untrusted_deserialization": "yes"}})
+    assert inv.run_crash_track()
+    assert inv.crash_track_skip_reason() is None
+
+
+def test_run_crash_track_logic_only_skipped_with_paper_trail():
+    # Pure authz + crypto = logic classes, sanitizer 'none' → skip the crash track (L4/L7).
+    inv = cap.from_dict({"capabilities": {
+        "multi_tenant_authz": "yes", "crypto_secrets": "yes"}})
+    assert not inv.run_crash_track()
+    reason = inv.crash_track_skip_reason()
+    assert reason and "blind" in reason
+
+
+def test_run_crash_track_no_active_capability():
+    inv = cap.from_dict({"capabilities": {}})
+    assert not inv.run_crash_track()
+    assert "nothing" in inv.crash_track_skip_reason()
+
+
+def test_run_crash_track_android_is_jni_only():
+    # Android app-security classes are witness-based (sanitizer none) → no byte track...
+    inv = cap.from_dict({"capabilities": {
+        "exported_ipc": "yes", "insecure_storage": "yes"}})
+    assert not inv.run_crash_track()
+    # ...unless native code is active AND reachable (the one asan gate).
+    native = cap.from_dict({
+        "capabilities": {"android_native_code": "yes"},
+        "native_reachable_from_untrusted_input": {"present": "yes", "evidence": "JNI chain"},
+    })
+    assert native.run_crash_track()

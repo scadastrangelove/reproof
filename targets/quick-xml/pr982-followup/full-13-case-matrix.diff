@@ -1,0 +1,280 @@
+diff --git a/tests/serde-issues.rs b/tests/serde-issues.rs
+index e7c5cba..7ba3e5e 100644
+--- a/tests/serde-issues.rs
++++ b/tests/serde-issues.rs
+@@ -1019,4 +1019,275 @@ mod issue978 {
+             Err(DeError::TooDeeplyNested(128))
+         ));
+     }
++
++    // -------------------------------------------------------------------------
++    // Full self-reference matrix (requested in review). `Box` and `Vec` are
++    // treated as separate paths, and every case has an asserted expected result
++    // -- green where the shape round-trips within the limit and returns a clean
++    // `TooDeeplyNested` past it, and an explicit error assertion where the shape
++    // hits a *pre-existing* enum limitation unrelated to this PR's depth cap.
++    //
++    //  #  | container      | field kind        | covered by
++    // ----+----------------+-------------------+------------------------------
++    //  1  | struct         | field, Box        | struct_field_box (below)
++    //  2  | struct         | field, Vec        | cycle2_deserialize_seq_vec_self
++    //  3  | struct         | $value, Box       | struct_value_field_box (below)
++    //  4  | struct         | $value, Vec       | cycle1_struct_value_vec_self
++    //  5  | enum newtype   | Box               | cycle3_enum_newtype_variant_self
++    //  6  | enum newtype   | Vec               | enum_newtype_variant_vec (below)
++    //  7  | enum tuple     | Box               | enum_tuple_variant_box (below)
++    //  8  | enum tuple     | Vec               | enum_tuple_variant_vec (below)
++    //  9  | enum struct    | named field, Box  | enum_struct_variant_field_box (below)
++    // 10  | enum struct    | named field, Vec  | enum_struct_variant_field_vec (below)
++    // 11  | enum struct    | $value, Box       | enum_struct_variant_value_box (below)
++    // 12  | enum struct    | $value, Vec       | enum_struct_variant_value_vec (below)
++    // 13  | siblings must not accumulate depth | siblings_do_not_accumulate_depth
++    // -------------------------------------------------------------------------
++
++    /// #1 struct field, `Box<Self>`: within the limit round-trips, past it a
++    /// clean `TooDeeplyNested`.
++    #[test]
++    fn struct_field_box() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        struct Node {
++            #[serde(default, rename = "Node")]
++            node: Option<Box<Node>>,
++        }
++        let ok = "<Node>".repeat(5) + &"</Node>".repeat(5);
++        let mut de = XmlDeserializer::from_str(&ok);
++        de.recursion_limit(8);
++        assert!(Node::deserialize(&mut de).is_ok());
++
++        let deep = "<Node>".repeat(50) + &"</Node>".repeat(50);
++        let mut de = XmlDeserializer::from_str(&deep);
++        de.recursion_limit(8);
++        assert!(matches!(Node::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #3 struct `$value` field, `Box<Self>`.
++    #[test]
++    fn struct_value_field_box() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        struct S {
++            #[serde(default, rename = "$value")]
++            v: Option<Box<S>>,
++        }
++        let ok = "<a>".repeat(5) + &"</a>".repeat(5);
++        let mut de = XmlDeserializer::from_str(&ok);
++        de.recursion_limit(8);
++        assert!(S::deserialize(&mut de).is_ok());
++
++        let deep = "<a>".repeat(50) + &"</a>".repeat(50);
++        let mut de = XmlDeserializer::from_str(&deep);
++        de.recursion_limit(8);
++        assert!(matches!(S::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #6 enum newtype variant, `Vec<Self>`. Like the `Box` newtype variant
++    /// (`cycle3`), a self-referential newtype variant re-enters enum
++    /// deserialization without consuming the variant's `Start` event, so it is
++    /// depth-capped at *any* nesting (that non-termination is #819, not this
++    /// PR). The point this PR fixes is that the cap is now a catchable
++    /// `TooDeeplyNested` instead of a stack overflow.
++    #[test]
++    fn enum_newtype_variant_vec() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum E {
++            Leaf(bool),
++            Wrap(Vec<E>),
++        }
++        // A non-recursive variant is unaffected.
++        let mut de = XmlDeserializer::from_str("<Leaf>true</Leaf>");
++        de.recursion_limit(8);
++        assert!(E::deserialize(&mut de).is_ok());
++
++        // The self-referential variant is capped, not overflowed.
++        let mut de = XmlDeserializer::from_str("<Wrap><Leaf>true</Leaf></Wrap>");
++        de.recursion_limit(8);
++        assert!(matches!(E::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #7 enum tuple variant, `Box<Self>`. Tuple variants use repeated sibling
++    /// tags (`<Multi>..</Multi><Multi>..</Multi>`). Two sub-shapes:
++    /// - recursive slot first: capped with `TooDeeplyNested` (same enum
++    ///   re-entry as the newtype cases), which is what this PR guarantees.
++    /// - recursive slot second: a *pre-existing* shape limitation independent
++    ///   of the depth cap -- it fails to parse with `UnexpectedStart` before
++    ///   depth is ever reached. Asserted explicitly so the behavior is pinned.
++    #[test]
++    fn enum_tuple_variant_box() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum First {
++            Leaf(bool),
++            Multi(Box<First>, u8),
++        }
++        let mut de = XmlDeserializer::from_str("<Multi>true</Multi><Multi>5</Multi>");
++        de.recursion_limit(8);
++        assert!(matches!(First::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum Second {
++            Leaf(bool),
++            Multi(bool, Box<Second>),
++        }
++        let mut de =
++            XmlDeserializer::from_str("<Multi>true</Multi><Multi><Leaf>true</Leaf></Multi>");
++        de.recursion_limit(8);
++        // Pre-existing: this shape does not parse regardless of the depth cap.
++        assert!(matches!(Second::deserialize(&mut de), Err(DeError::UnexpectedStart(_))));
++    }
++
++    /// #8 enum tuple variant, `Vec<Self>`. Same slot-first/slot-second split as
++    /// #7: recursive slot first is depth-capped; recursive slot second hits the
++    /// same *pre-existing*, non-depth-related `UnexpectedStart` as the `Box`
++    /// case -- confirming this is a tuple-variant limitation shared by both
++    /// container types, not something specific to `Box`.
++    #[test]
++    fn enum_tuple_variant_vec() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum First {
++            Leaf(bool),
++            Multi(Vec<First>, u8),
++        }
++        let mut de = XmlDeserializer::from_str("<Multi>true</Multi><Multi>5</Multi>");
++        de.recursion_limit(8);
++        assert!(matches!(First::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum Second {
++            Leaf(bool),
++            Multi(bool, Vec<Second>),
++        }
++        let mut de =
++            XmlDeserializer::from_str("<Multi>true</Multi><Multi><Leaf>true</Leaf></Multi>");
++        de.recursion_limit(8);
++        // Pre-existing: same shape limitation as the `Box` case, not depth-related.
++        assert!(matches!(Second::deserialize(&mut de), Err(DeError::UnexpectedStart(_))));
++    }
++
++    /// #9 enum struct variant, named `Box<Self>` field. The non-recursive shape
++    /// deserializes; the self-referential shape hits a *pre-existing* issue
++    /// (`unknown variant `$text``) that is independent of the depth cap -- the
++    /// analogous `Vec` (#10) and `$value` (#11) forms work. Asserted explicitly
++    /// so the current behavior is pinned rather than silently skipped.
++    #[test]
++    fn enum_struct_variant_field_box() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum E {
++            Leaf(bool),
++            Named {
++                #[serde(default, rename = "Named")]
++                node: Option<Box<E>>,
++            },
++        }
++        // Non-recursive shape works.
++        let mut de = XmlDeserializer::from_str("<Named><Leaf>true</Leaf></Named>");
++        de.recursion_limit(8);
++        assert!(E::deserialize(&mut de).is_ok());
++
++        // Self-referential shape: pre-existing failure, not the depth cap.
++        let mut de = XmlDeserializer::from_str("<Named><Named></Named></Named>");
++        de.recursion_limit(8);
++        assert!(matches!(E::deserialize(&mut de), Err(DeError::Custom(_))));
++    }
++
++    /// #10 enum struct variant, named `Vec<Self>` field.
++    #[test]
++    fn enum_struct_variant_field_vec() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum E {
++            Leaf(bool),
++            Named {
++                #[serde(default, rename = "Named")]
++                node: Vec<E>,
++            },
++        }
++        let ok = "<Named>".repeat(5) + &"</Named>".repeat(5);
++        let mut de = XmlDeserializer::from_str(&ok);
++        de.recursion_limit(8);
++        assert!(E::deserialize(&mut de).is_ok());
++
++        let deep = "<Named>".repeat(50) + &"</Named>".repeat(50);
++        let mut de = XmlDeserializer::from_str(&deep);
++        de.recursion_limit(8);
++        assert!(matches!(E::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #11 enum struct variant, `$value` field, `Box<Self>`.
++    #[test]
++    fn enum_struct_variant_value_box() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum E {
++            Leaf(bool),
++            Named {
++                #[serde(default, rename = "$value")]
++                v: Option<Box<E>>,
++            },
++        }
++        let ok = "<Named>".repeat(5) + &"</Named>".repeat(5);
++        let mut de = XmlDeserializer::from_str(&ok);
++        de.recursion_limit(8);
++        assert!(E::deserialize(&mut de).is_ok());
++
++        let deep = "<Named>".repeat(50) + &"</Named>".repeat(50);
++        let mut de = XmlDeserializer::from_str(&deep);
++        de.recursion_limit(8);
++        assert!(matches!(E::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #12 enum struct variant, `$value` field, `Vec<Self>`.
++    #[test]
++    fn enum_struct_variant_value_vec() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        enum E {
++            Leaf(bool),
++            Named {
++                #[serde(default, rename = "$value")]
++                v: Vec<E>,
++            },
++        }
++        let ok = "<Named>".repeat(5) + &"</Named>".repeat(5);
++        let mut de = XmlDeserializer::from_str(&ok);
++        de.recursion_limit(8);
++        assert!(E::deserialize(&mut de).is_ok());
++
++        let deep = "<Named>".repeat(50) + &"</Named>".repeat(50);
++        let mut de = XmlDeserializer::from_str(&deep);
++        de.recursion_limit(8);
++        assert!(matches!(E::deserialize(&mut de), Err(DeError::TooDeeplyNested(8))));
++    }
++
++    /// #13 sibling (non-nested) elements must not accumulate depth: 200 siblings
++    /// at one level deserialize fine under a small limit, proving the guard
++    /// counts nesting, not elements-seen.
++    #[test]
++    fn siblings_do_not_accumulate_depth() {
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        struct Leaf {
++            #[serde(default)]
++            _x: (),
++        }
++        #[derive(Debug, Deserialize)]
++        #[allow(dead_code)]
++        struct Root {
++            #[serde(default, rename = "Leaf")]
++            leaves: Vec<Leaf>,
++        }
++        let xml = format!("<Root>{}</Root>", "<Leaf/>".repeat(200));
++        let mut de = XmlDeserializer::from_str(&xml);
++        de.recursion_limit(4);
++        assert!(Root::deserialize(&mut de).is_ok());
++    }
+ }

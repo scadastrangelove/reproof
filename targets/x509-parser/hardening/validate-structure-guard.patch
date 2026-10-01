@@ -1,0 +1,21 @@
+diff --git a/src/validate/structure.rs b/src/validate/structure.rs
+index 1b3a358..4722ecf 100644
+--- a/src/validate/structure.rs
++++ b/src/validate/structure.rs
+@@ -166,10 +166,14 @@ impl<'a> Validator<'a> for X509PublicKeyValidator {
+         // res &= TbsCertificateStructureValidator.validate(&item.tbs_certificate, l);
+         match item.parsed() {
+             Ok(PublicKey::RSA(rsa)) => {
+-                if rsa.modulus[0] & 0x80 != 0 {
++                if rsa.modulus.is_empty() {
++                    l.warn("Public key: (RSA) modulus is empty");
++                } else if rsa.modulus[0] & 0x80 != 0 {
+                     l.warn("Public key: (RSA) modulus is negative");
+                 }
+-                if rsa.exponent[0] & 0x80 != 0 {
++                if rsa.exponent.is_empty() {
++                    l.warn("Public key: (RSA) exponent is empty");
++                } else if rsa.exponent[0] & 0x80 != 0 {
+                     l.warn("Public key: (RSA) exponent is negative");
+                 }
+             }

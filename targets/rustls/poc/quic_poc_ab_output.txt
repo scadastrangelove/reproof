@@ -1,0 +1,16 @@
+==== PoC A: mixed QUIC-compatibility TLS1.3 suite provider, crafted ClientHello
+  good suite quic-capable: true, bad(cloned) suite quic-capable: false
+  server constructed OK (mixed provider passed the 'any' QUIC-capability gate)
+  crafted ClientHello: 178 bytes, cipher_suites=[TLS13_CHACHA20_POLY1305_SHA256 (quic:None)]
+
+thread 'main' panicked at ~/.cargo/git/checkouts/rustls-47f8389eeaf7e3eb/bd9f7f5/rustls/src/tls13/key_schedule.rs:354:36:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  >>> PANIC CONFIRMED: called `Option::unwrap()` on a `None` value
+
+==== PoC B: client accepts a legacy TLS1.2 ServerHello on a QUIC connection
+  client constructed OK over a QUIC connection with a TLS1.2-capable provider
+  crafted legacy TLS1.2 ServerHello (no supported_versions ext): 44 bytes
+  ACCEPTED: client processed the TLS1.2 ServerHello on its QUIC connection with no error -- it is now running the TLS1.2 state machine over QUIC (missing is_quic() guard confirmed reachable). The debug_assert! panic fires further down this same TLS1.2 flow, at the first ChangeCipherSpec emission (ExpectServerDone::handle_input -> emit_ccs -> Quic::send_msg).
+
+TEST-EXIT=0

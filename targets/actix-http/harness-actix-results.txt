@@ -1,0 +1,30 @@
+==== CONTROL-A valid 1.1 chunked (no-FP)
+  RFC-9112 expectation: chunked body 'Hello', no second request
+  actix req1: POST /a HTTP/1.1  |  TE-header=Some("chunked") CL-header=None  |  consumed 57B, remaining 15B
+  actix body: framed as body(chunk/length), 5B, then EOF. remaining 0B
+
+==== CONTROL-B double Content-Length (hardening seen)
+  RFC-9112 expectation: REJECT (multiple Content-Length)
+  actix req1 REJECTED: Header  (fail-closed)
+
+==== CAND#1a  1.0 + TE:chunked + keep-alive, de-chunked trailing request
+  RFC-9112 expectation: server MUST chunk-decode or 400; trailing GET is req1 BODY, never a new request
+  actix req1 REJECTED: Header  (fail-closed)
+
+==== CAND#1b  1.0 + TE:chunked + keep-alive, raw chunked body
+  RFC-9112 expectation: chunk-decode body 'Hello'; no second request
+  actix req1 REJECTED: Header  (fail-closed)
+
+==== CAND#2  1.1 + Content-Length + TE:chunked
+  RFC-9112 expectation: frame by TE (chunked); Content-Length MUST be removed (RFC 9112 6.1)
+  actix req1 REJECTED: Header  (fail-closed)
+
+==== CAND#3a 1.1 + TE:identity + Content-Length:5
+  RFC-9112 expectation: identity is not a valid TE per RFC 9112; if accepted, body length from CL
+  actix req1 REJECTED: Header  (fail-closed)
+
+==== CAND#3b 1.1 + TE:identity + NO Content-Length, keep-alive, trailing request
+  RFC-9112 expectation: ambiguous; a safe server 400s. If treated as no-body, trailing GET smuggles.
+  actix req1 REJECTED: Header  (fail-closed)
+
+TEST-EXIT=0

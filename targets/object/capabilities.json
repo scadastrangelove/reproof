@@ -1,0 +1,13 @@
+{
+  "capabilities": {
+    "untrusted_deserialization": {"present": "yes", "evidence": "File::parse deserializes attacker-controlled object-file bytes (ELF/PE/Mach-O/COFF/archive/wasm) into typed structures"},
+    "network_protocol_parser": {"present": "yes", "evidence": "byte-format container parser over strongly-adversarial binary formats"},
+    "inbound_c_abi": {"present": "no", "evidence": "pure-Rust API; grep extern \"C\"/#[no_mangle] empty"},
+    "outbound_ffi": {"present": "no", "evidence": "deps pure Rust (miniz_oxide/ruzstd); flate2 default backend miniz_oxide not C zlib"},
+    "unsafe_simd": {"present": "no", "evidence": "no SIMD kernels in the read path"},
+    "concurrency_async": {"present": "no", "evidence": "single-threaded read path"},
+    "crypto_secrets": {"present": "no", "evidence": "no crypto/secrets surface"},
+    "multi_tenant_authz": {"present": "no", "evidence": "library, no auth surface"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "File::parse is the crate's primary public entry; the fuzz/riptarget drive it directly"}
+}

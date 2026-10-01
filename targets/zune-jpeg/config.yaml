@@ -1,0 +1,50 @@
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+# zune-jpeg 0.5.15 — a fast/safe JPEG decoder with REAL unsafe SIMD (AVX2/NEON
+# IDCT, upsampler, color-convert, unsafe_utils). Unlike lopdf (1-unsafe, panic-DoS
+# only), this is a memory-safety surface: cargo-fuzz's default ASan catches OOB in
+# the unsafe SIMD/pointer paths, and dimension arithmetic (w*h*components) is a
+# classic integer-overflow → alloc/index sink. capabilities: unsafe_simd +
+# network_protocol_parser (byte-surface) → run_crash_track() == true (P0.4).
+profile: rust
+image_tag: vuln-pipeline-zune-jpeg:latest
+github_url: https://github.com/etemesi254/zune-image
+commit: "zune-jpeg-0.5.15"                     # crates.io published tarball (repo is the zune-image workspace)
+binary_path: /work/riptarget                    # decode driver, reads argv[1]
+source_root: /work/crate
+
+# Multi-detector oracle: the panic/overflow/hang driver (run under overflow-checks
+# ON for the detection build — but P0.1 requires re-testing any arithmetic-overflow
+# crash under the SHIPPING build before grading it real; see build_profile.py).
+reattack_harness: /work/run_detectors.sh
+
+# Detection build (overflow-checks ON so arithmetic overflow also traps). NB the
+# fuzz stage builds the SHIPPING profile (overflow-checks OFF) — crashes there are
+# production-real; overflow-only crashes are R7 build_profile_gated.
+build_command: >-
+  cd /work/crate &&
+  RUSTFLAGS="-C overflow-checks=on -C debug-assertions=on"
+  cargo build --release --bin riptarget &&
+  cp target/release/riptarget /work/riptarget
+
+test_command: cd /work/crate && cargo test --lib
+
+memory_limit: 4g
+build_timeout_s: 1800
+
+focus_areas:
+  - "unsafe SIMD (unsafe_utils_avx2.rs / _neon.rs, idct/avx2, upsampler/avx2, color_convert/avx) — pointer/slice bounds vs MCU/component dims under ASan"
+  - "dimension arithmetic (components.rs, decoder.rs) — width*height*components overflow → Vec::with_capacity / out-buffer indexing"
+  - "Huffman + bitstream (huffman.rs, bitstream.rs) — DHT table build, bit refill, code lookup indexing"
+  - "progressive JPEG (mcu_prog.rs) — spectral selection / successive approximation coefficient buffer indexing, Ss/Se/Ah/Al bounds"
+  - "headers (headers.rs, marker.rs, components.rs) — SOF/SOS/DQT/DRI parse, component id / sampling-factor bounds, restart intervals"
+
+known_bugs: []
+
+attack_surface: |
+  A JPEG decoder. Real surface: any caller of the public
+  `JpegDecoder::new(ZCursor::new(bytes)).decode()` on untrusted bytes (image
+  pipelines, thumbnailers, upload handlers). Baseline + progressive, grayscale /
+  YCbCr / CMYK, arbitrary subsampling. The decode path runs unsafe SIMD kernels;
+  memory corruption (not just panic) is in scope. No auth, no wire protocol — a
+  pure byte parser over a strongly-attacker-controlled format.

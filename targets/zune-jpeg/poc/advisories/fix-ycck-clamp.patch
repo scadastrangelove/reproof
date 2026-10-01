@@ -1,0 +1,21 @@
+--- a/crates/zune-jpeg/src/misc.rs
++++ b/crates/zune-jpeg/src/misc.rs
+@@ -306,7 +306,17 @@
+             // it as YCbCr
+             // So I will match that to match existing ones
+             warn!("Treating YCCK colorspace as YCbCr as component length does not match");
+-            img.input_colorspace = ColorSpace::YCbCr
++            // Only treat YCCK as YCbCr when there really are >= 3 components; otherwise a
++            // 2-component YCCK frame would leave num_components()==3 > components.len()==2 and
++            // panic on `self.components[2]` in the progressive/baseline component loop. Fall
++            // through to MultiBand(components.len()) as the sibling branch below does.
++            if img.components.len() >= 3 {
++                img.input_colorspace = ColorSpace::YCbCr;
++            } else if !img.components.is_empty() {
++                img.input_colorspace = ColorSpace::MultiBand(
++                    NonZeroU32::new(img.components.len() as u32).unwrap()
++                );
++            }
+         } else {
+             // Note, translated this to a warning to handle valid images of the sort
+             // See https://github.com/etemesi254/zune-image/issues/288 where there

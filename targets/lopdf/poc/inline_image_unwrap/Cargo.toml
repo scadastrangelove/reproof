@@ -1,0 +1,10 @@
+# Run in-image (offline, zero API quota):
+#   docker run --rm -v $PWD:/pocbox -w /pocbox vuln-pipeline-lopdf:latest \
+#     bash -c 'cargo run --release --offline'
+[package]
+name = "inline_image_unwrap_poc"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+lopdf = { path = "/work/crate" }

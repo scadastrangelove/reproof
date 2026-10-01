@@ -28,7 +28,37 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import redact
+
 DEFAULT_TOOLS = ["Read", "Write", "Bash"]
+
+_ANSI = {
+    # signal level
+    "dim": "2;90",   # low-signal progress (tool calls) — dim + bright-black = faintest grey
+    "red": "91",     # crash landed
+    "bold": "1",     # verified / important finding
+    # phase (start-of-phase lines so interleaved agents are scannable)
+    "recon": "96",   # cyan
+    "find": "94",    # blue
+    "grade": "93",   # yellow
+    "judge": "95",   # magenta
+    "report": "92",  # green
+    "patch": "92",   # green (never interleaves with report)
+}
+
+
+def color(text: str, name: str, stream=sys.stdout) -> str:
+    """Wrap ``text`` in ANSI color ``name`` if ``stream`` is a TTY.
+
+    dim  — low-signal progress lines (tool calls)
+    red  — a crash landed
+    bold — verified / important findings
+
+    No-op when piped or redirected so grep/tee/log files stay clean.
+    """
+    if not getattr(stream, "isatty", lambda: False)():
+        return text
+    return f"\033[{_ANSI[name]}m{text}\033[0m"
 
 
 @dataclass
@@ -65,11 +95,26 @@ class AgentResult:
 
 
 def normalize_message_text(raw: dict) -> str | None:
-    """Plain assistant text from one Kimi event, or None for non-text events."""
+    """Plain assistant text from one event, or None for non-text events.
+
+    Accepts the Kimi stream-json shape (``role: assistant`` + string
+    ``content``) and the upstream Anthropic shape (``type: assistant`` +
+    ``message.content`` block list) so AgentResult stays consumable by
+    backend-agnostic stage code and upstream fixtures alike.
+    """
     if raw.get("role") == "assistant":
         content = raw.get("content")
         if isinstance(content, str) and content:
             return content
+    if raw.get("type") == "assistant":
+        message = raw.get("message") or {}
+        blocks = message.get("content")
+        if isinstance(blocks, list):
+            texts = [b.get("text", "") for b in blocks
+                     if isinstance(b, dict) and b.get("type") == "text"]
+            joined = "".join(texts)
+            if joined:
+                return joined
     return None
 
 
@@ -159,6 +204,23 @@ async def run_agent(
     attempt = 0
     assistant_count = 0
 
+    # Stage callers pass system_prompt/tools the way upstream passed them to
+    # `claude --system-prompt --tools`. Kimi takes both via an agent Markdown
+    # file (ADR-001 R2/R3), so materialize one inside the container.
+    # Written once per container — it is the session's agent on resume too.
+    if agent_file is None and (system_prompt is not None or tools is not None):
+        from . import docker_ops  # local import: agent layer must not hard-depend on docker
+        agent_file = "/work/.reproof-agent.md"
+        import io
+        buf = io.StringIO()
+        buf.write("---\nname: reproof-stage\ndescription: Pipeline stage agent\n")
+        if tools is not None:
+            buf.write("tools: [" + ", ".join(tools) + "]\n")
+        buf.write("---\n\n")
+        buf.write(system_prompt or "You are a pipeline stage agent.")
+        buf.write("\n")
+        docker_ops.write_file(container, agent_file, buf.getvalue().encode())
+
     transcript_file = open(transcript_path, "w") if transcript_path else None
     try:
         while True:
@@ -188,9 +250,8 @@ async def run_agent(
 
                     result.messages.append(event)
                     if transcript_file:
-                        # TODO: redact.scrub() once the auth module lands
-                        # (Moonshot credential patterns).
-                        transcript_file.write(json.dumps(event) + "\n")
+                        transcript_file.write(
+                            redact.scrub(json.dumps(event)) + "\n")
                         transcript_file.flush()
 
                     if event.get("role") == "assistant":

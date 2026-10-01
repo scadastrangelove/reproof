@@ -1,0 +1,12 @@
+# Run inside the built target image (offline registry cache, no API quota):
+#   docker run --rm -v $PWD:/pocbox -w /pocbox vuln-pipeline-x509-parser:latest \
+#     bash -c 'cargo run --quiet --offline'
+[package]
+name = "asn1time_add_poc"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+x509-parser = { path = "/work/crate" }
+time = { version = "=0.3.41", features = ["macros"] }
+asn1-rs = "0.8.0-beta.1"
