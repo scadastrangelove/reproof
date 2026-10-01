@@ -1,0 +1,9 @@
+{"role":"meta","type":"system.version","version":"2.1.1"}
+{"role":"assistant","tool_calls":[{"type":"function","id":"tool_kO589QBHQ9aLeaaVePJZojHA","function":{"name":"Write","arguments":"{\"path\":\"/tmp/r4_f1.txt\",\"content\":\"1\"}"}},{"type":"function","id":"tool_XH4HWOet74ICUgXQRgoPNwYZ","function":{"name":"Write","arguments":"{\"path\":\"/tmp/r4_f2.txt\",\"content\":\"2\"}"}},{"type":"function","id":"tool_ZU78IQ9YTw3iXRfmrgFda41s","function":{"name":"Write","arguments":"{\"path\":\"/tmp/r4_f3.txt\",\"content\":\"3\"}"}},{"type":"function","id":"tool_nYcxLVNEEYWhAL8CtBStx1Ec","function":{"name":"Write","arguments":"{\"path\":\"/tmp/r4_f4.txt\",\"content\":\"4\"}"}},{"type":"function","id":"tool_gvh4aVDpwUbBe5hKDU6yO3cV","function":{"name":"Write","arguments":"{\"path\":\"/tmp/r4_f5.txt\",\"content\":\"5\"}"}}]}
+{"role":"tool","tool_call_id":"tool_XH4HWOet74ICUgXQRgoPNwYZ","content":"Wrote 1 bytes to /tmp/r4_f2.txt"}
+{"role":"tool","tool_call_id":"tool_kO589QBHQ9aLeaaVePJZojHA","content":"Wrote 1 bytes to /tmp/r4_f1.txt"}
+{"role":"tool","tool_call_id":"tool_ZU78IQ9YTw3iXRfmrgFda41s","content":"Wrote 1 bytes to /tmp/r4_f3.txt"}
+{"role":"tool","tool_call_id":"tool_gvh4aVDpwUbBe5hKDU6yO3cV","content":"Wrote 1 bytes to /tmp/r4_f5.txt"}
+{"role":"tool","tool_call_id":"tool_nYcxLVNEEYWhAL8CtBStx1Ec","content":"Wrote 1 bytes to /tmp/r4_f4.txt"}
+{"role":"assistant","content":"All five files are created, each in its own Write tool call:\n\n- `/tmp/r4_f1.txt` → 1\n- `/tmp/r4_f2.txt` → 2\n- `/tmp/r4_f3.txt` → 3\n- `/tmp/r4_f4.txt` → 4\n- `/tmp/r4_f5.txt` → 5\n\nALLDONE"}
+{"role":"meta","type":"session.resume_hint","session_id":"session_68611510-4e3c-4137-a87e-d5e95cd7439d","command":"kimi -r session_68611510-4e3c-4137-a87e-d5e95cd7439d","content":"To resume this session: kimi -r session_68611510-4e3c-4137-a87e-d5e95cd7439d"}

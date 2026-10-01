@@ -1,6 +1,6 @@
 # ADR-001 — Kimi Code CLI as the first agent backend
 
-**Status:** proposed (Phase 0 verification pending)
+**Status:** accepted — Phase 0 verified live on Kimi Code CLI 2.1.1 (2026-10-01)
 **Date:** 2026-10-01
 
 ## Context
@@ -46,6 +46,36 @@ the adapter potentially unlocks other backends later.
 | R4 | **Turn budget** | `--max-turns` is the per-agent budget valve; Kimi's `max_steps` mapping and its exhaustion behavior unverified | Force exhaustion, observe exit semantics |
 | R5 | **Auth in-container** | `kimi login` is interactive OAuth; containers need a non-interactive API-key path, and the egress proxy allowlist must switch to the Moonshot API host | Headless container login via env/config |
 | R6 | **stream-json schema** | Kimi's event shapes (Assistant/Tool messages) differ from Claude's content-block stream; a normalizer into `AgentResult` is required | Capture and diff both schemas |
+
+## Phase 0 verification results (2026-10-01, Kimi Code CLI 2.1.1)
+
+All six risks verified live against `kimi -p --output-format stream-json`;
+fixtures in `tests/fixtures/kimi_streamjson_*.jsonl`.
+
+| # | Verdict | Evidence |
+|---|---|---|
+| R1 resume | **PASS** | `kimi -p ... --session <id>` yields ONLY new events; context preserved (resumed session recalled facts from the earlier turn); session id arrives in the terminal `meta/session.resume_hint` event (`kimi -r <id>` alias exists). Constraint: `--agent-file` cannot combine with `--session` — pass the agent file on the first attempt only |
+| R2 system prompt | **PASS** | `--agent-file <md>`: YAML frontmatter + body IS the system prompt. Canary persona obeyed verbatim in `-p` mode. (`$KIMI_CODE_HOME/SYSTEM.md` is the permanent-override alternative) |
+| R3 tool restriction | **PASS** | Frontmatter `tools: [Read, Bash]` allowlist; `tools: []` disables all tools (verified: agent asked to write a file produced text only, no file, no tool events). `disallowedTools` denylist also available; config.toml `[[permission.rules]]` adds static deny rules that apply even in `-p` |
+| R4 turn budget | **PASS, config-only** | `[loop_control] max_steps_per_turn` in `$KIMI_CODE_HOME/config.toml`. On exhaustion: exit code 1, `loop.max_steps_exceeded` on stderr, stream ends WITHOUT a terminal error event — adapter must treat rc!=0 as resumable failure. Steps count LLM turns, not tool calls (parallel tool batches count once) |
+| R5 auth | **PASS, env-only** | `KIMI_MODEL_NAME` + `KIMI_MODEL_API_KEY` + `KIMI_MODEL_BASE_URL` synthesize an in-memory provider/model — nothing written to disk, ideal for containers. `config.toml` providers with `api_key_env` is the persistent alternative. OAuth device flow exists (`kimi login`) but is not needed |
+| R6 schema | **PASS** | Event kinds: `meta/system.version` (init) → `assistant` (with `content` and/or OpenAI-style `tool_calls[]`, possibly batched parallel calls) → `tool` (result, keyed by `tool_call_id`) → final `assistant` → `meta/session.resume_hint`. NO `{"type":"result"}` terminator: process exit closes the stream (background-task keep-alive defaults off). `--auto` is rejected with `-p` — prompt mode already auto-approves |
+
+### Adapter decisions flowing from Phase 0
+
+1. **Termination = process exit**, not a result sentinel (upstream broke on the
+   first `result` message; Kimi has none). Partial-transcript preservation is
+   unchanged.
+2. **Resume**: `--session <id>` on attempts > 0, never `--agent-file` there.
+3. **System prompt + tools**: one generated agent Markdown file per stage
+   (find/grade/report/judge), written into the container's work dir.
+4. **Budget**: ship a `$KIMI_CODE_HOME/config.toml` in the agent image with
+   `loop_control.max_steps_per_turn` mapped from `--max-turns`.
+5. **Auth**: `KIMI_MODEL_*` env into `docker run -e`; egress allowlist gains
+   the configured base-URL host instead of `api.anthropic.com`.
+6. **Normalizer**: `assistant.content` → text; `assistant.tool_calls` →
+   progress lines; `tool` → transcript; both `meta` types → session
+   bookkeeping.
 
 ## Consequences
 

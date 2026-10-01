@@ -1,21 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Kimi Code CLI headless backend — adapter skeleton.
+"""Kimi Code CLI headless backend — contract verified against CLI 2.1.1.
 
 Mirrors the upstream `harness/agent.py:run_agent()` contract so all stage
 code (find / grade / judge / report / patch) stays backend-agnostic:
 
-    docker exec <container> kimi -p --output-format stream-json ...
+    docker exec <container> kimi -p <prompt> --output-format stream-json
 
-Upstream responsibilities this module must reproduce:
-  1. argv construction per attempt (prompt in argv, not stdin — ARG_MAX is
-     fine, stdin delivery raced under high-parallel launch upstream)
-  2. stream-json parsing -> normalized AgentResult
-  3. session resume with exponential backoff (cap 300s, <=20 resumes)
-  4. per-message transcript streaming with fsync + credential scrubbing
-  5. heartbeat / progress lines on stderr
-
-Phase-0 risks tracked in docs/adr/ADR-001-agent-backend-kimi.md are marked
-TODO(Rn) at the exact code sites they block.
+Verified contract (docs/adr/ADR-001-agent-backend-kimi.md, Phase 0):
+  * events: meta/system.version → assistant(content|tool_calls[]) → tool →
+    final assistant → meta/session.resume_hint; NO result sentinel —
+    process exit terminates the stream
+  * resume: `--session <id>` yields ONLY new events; --agent-file is
+    first-attempt-only (incompatible with --session)
+  * system prompt + tools: generated agent Markdown (--agent-file);
+    `tools: []` disables all tools
+  * budget: $KIMI_CODE_HOME/config.toml [loop_control] max_steps_per_turn;
+    exhaustion = rc 1 + stderr message, stream ends silently
+  * auth: KIMI_MODEL_NAME / KIMI_MODEL_API_KEY / KIMI_MODEL_BASE_URL env —
+    nothing on disk
 """
 from __future__ import annotations
 
@@ -28,23 +30,17 @@ from typing import Any
 
 DEFAULT_TOOLS = ["Read", "Write", "Bash"]
 
-# Kimi Code CLI stream-json event shapes (verify against a live capture — R6).
-# Expected coarse shape differs from Claude's content-block stream:
-#   {"role": "assistant", "content": ..., "tool_calls": [...]}
-#   {"role": "tool", ...}
-# A capture fixture from a real `kimi -p --output-format stream-json` run
-# belongs in tests/fixtures/ before the normalizer is trusted.
-
 
 @dataclass
 class AgentResult:
     """Backend-neutral collected output of one agent run.
 
     Field-for-field compatible with the upstream AgentResult so judge /
-    grade / report code consumes either backend unchanged.
+    grade / report code consumes either backend unchanged. ``messages``
+    holds raw Kimi stream-json events.
     """
     messages: list[dict] = field(default_factory=list)
-    result_message: dict | None = None
+    result_message: dict | None = None      # unused on Kimi (no sentinel)
     session_id: str | None = None
     error: str | None = None
     resume_count: int = 0
@@ -69,17 +65,31 @@ class AgentResult:
 
 
 def normalize_message_text(raw: dict) -> str | None:
-    """Map one Kimi stream-json event to plain assistant text, or None.
-
-    TODO(R6): implement against a captured fixture. Claude's stream uses
-    {"type":"assistant","message":{"content":[{"type":"text",...}]}};
-    Kimi emits role-based events with tool_calls. Only assistant text
-    should survive normalization — tool calls and thinking are not tags.
-    """
+    """Plain assistant text from one Kimi event, or None for non-text events."""
     if raw.get("role") == "assistant":
         content = raw.get("content")
-        return content if isinstance(content, str) else None
+        if isinstance(content, str) and content:
+            return content
     return None
+
+
+def iter_tool_calls(raw: dict) -> list[tuple[str, str]]:
+    """(tool_name, key_arg) pairs from an assistant event; may be a batch."""
+    if raw.get("role") != "assistant":
+        return []
+    out = []
+    for tc in raw.get("tool_calls") or []:
+        fn = tc.get("function") or {}
+        args = fn.get("arguments") or ""
+        key_arg = ""
+        try:
+            parsed = json.loads(args)
+            key_arg = str(parsed.get("command") or parsed.get("file_path")
+                          or parsed.get("path") or parsed.get("pattern") or "")
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        out.append((fn.get("name", "?"), key_arg.replace("\n", " ")[:120]))
+    return out
 
 
 def parse_xml_tag(text: str, tag: str) -> str | None:
@@ -88,28 +98,37 @@ def parse_xml_tag(text: str, tag: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
-def build_argv(container: str, prompt: str, *, model: str, max_turns: int,
-               tools: list[str] | None, system_prompt: str | None,
-               session_id: str | None) -> list[str]:
-    """Construct the `docker exec ... kimi` argv for one attempt.
+def write_agent_file(path: str, *, name: str, description: str,
+                     tools: list[str] | None, system_prompt: str) -> None:
+    """Materialize a Kimi agent Markdown file for one pipeline stage.
 
-    TODO(R2): system_prompt — Claude takes --system-prompt; Kimi exposes
-    agent YAML specs (system_prompt + tools). Pick the mechanism and record
-    it in ADR-001.
-    TODO(R3): tool restriction to Read/Write/Bash (none for judge agents).
-    TODO(R4): max-turns equivalent (agent-spec max_steps?) and its
-    exhaustion semantics.
+    tools=None -> allowlist omitted (all tools); tools=[] -> no tools
+    (judge/compare/report-grader agents upstream get no tools).
+    """
+    if tools is None:
+        tools_yaml = ""
+    else:
+        tools_yaml = "tools: [" + ", ".join(tools) + "]\n"
+    with open(path, "w") as f:
+        f.write(f"---\nname: {name}\ndescription: {description}\n"
+                f"{tools_yaml}---\n\n{system_prompt}\n")
+
+
+def build_argv(container: str, prompt: str, *, model: str,
+               agent_file: str | None, session_id: str | None) -> list[str]:
+    """`docker exec ... kimi` argv for one attempt.
+
+    -p mode auto-approves routine calls (--auto is rejected with -p); static
+    deny rules from config.toml still apply. agent_file is first-attempt
+    only: --session already restores the session's agent.
     """
     argv = ["docker", "exec", "-i", "-w", "/work", "--", container, "kimi",
-            "-p", prompt,
-            "--output-format", "stream-json",
-            "--auto",  # non-interactive approvals; gVisor is the boundary
+            "-p", prompt, "--output-format", "stream-json",
             "--model", model]
-    # TODO(R1): resume — Claude: --resume <session_id> "continue" yields only
-    # NEW messages. Kimi: --session <id> / --continue. Verify new-only yield
-    # before wiring, else dedupe by event id here.
     if session_id:
         argv += ["--session", session_id]
+    elif agent_file:
+        argv += ["--agent-file", agent_file]
     return argv
 
 
@@ -117,32 +136,37 @@ async def run_agent(
     prompt: str,
     *,
     container: str,
-    max_turns: int,
+    max_turns: int,       # mapped to loop_control.max_steps_per_turn in the
+                          # container's $KIMI_CODE_HOME/config.toml (ADR-001 §R4)
     model: str,
+    agent_file: str | None = None,
     max_resume_attempts: int = 20,
     transcript_path: str | None = None,
     heartbeat_every: int = 25,
     progress_prefix: str | None = None,
-    tools: list[str] | None = None,
-    system_prompt: str | None = None,
+    tools: list[str] | None = None,       # baked into agent_file
+    system_prompt: str | None = None,     # baked into agent_file
 ) -> AgentResult:
     """Run one Kimi agent session inside ``container``.
 
-    Contract copied from upstream run_agent(): stream events, persist a
-    scrubbed fsync'd transcript, break on the FIRST terminal result, resume
-    with capped exponential backoff on transient failure, never lose a
-    partial AgentResult to an exception.
+    Upstream discipline preserved: stream events, persist an fsync'd
+    transcript, resume with capped exponential backoff on transient failure
+    (incl. rc!=0 such as loop.max_steps_exceeded), never lose a partial
+    AgentResult to an exception. Termination is process exit — Kimi's
+    stream has no result sentinel.
     """
     result = AgentResult()
     attempt = 0
+    assistant_count = 0
 
     transcript_file = open(transcript_path, "w") if transcript_path else None
     try:
         while True:
-            argv = build_argv(container, prompt, model=model,
-                              max_turns=max_turns, tools=tools,
-                              system_prompt=system_prompt,
-                              session_id=result.session_id if attempt else None)
+            argv = build_argv(
+                container, prompt, model=model,
+                agent_file=agent_file,
+                session_id=result.session_id if attempt else None,
+            )
             proc = await asyncio.create_subprocess_exec(
                 *argv,
                 stdin=asyncio.subprocess.DEVNULL,
@@ -164,17 +188,23 @@ async def run_agent(
 
                     result.messages.append(event)
                     if transcript_file:
-                        # TODO: redact.scrub() once the auth module lands —
-                        # Moonshot credential patterns (R5).
+                        # TODO: redact.scrub() once the auth module lands
+                        # (Moonshot credential patterns).
                         transcript_file.write(json.dumps(event) + "\n")
                         transcript_file.flush()
 
-                    # TODO(R6): terminal-result detection. Claude emits
-                    # {"type":"result", "is_error":...} — break on the FIRST
-                    # one. Kimi's terminal event shape is unverified; do not
-                    # wait for stream exhaustion (background tasks keep the
-                    # stream alive).
-                    # TODO(R6): session_id capture from the init event.
+                    if event.get("role") == "assistant":
+                        assistant_count += 1
+                        if progress_prefix:
+                            for name, arg in iter_tool_calls(event):
+                                print(f"{progress_prefix}   → {name}: {arg}",
+                                      file=sys.stderr, flush=True)
+                        if assistant_count % heartbeat_every == 0:
+                            print(f"  [agent] {assistant_count} msgs")
+                    elif (event.get("role") == "meta"
+                          and event.get("type") == "session.resume_hint"):
+                        if result.session_id is None:
+                            result.session_id = event.get("session_id")
             except Exception as e:  # noqa: BLE001 — upstream resume discipline
                 if proc.returncode is None:
                     proc.terminate()
@@ -190,9 +220,21 @@ async def run_agent(
                 await asyncio.sleep(backoff)
                 continue
 
-            # Stream ended without a terminal event.
+            # Process exit terminates the stream (no result sentinel).
             rc = await proc.wait()
-            result.error = f"kimi exited rc={rc} without terminal result"
+            stderr = b""
+            if proc.stderr:
+                stderr = await proc.stderr.read()
+            if rc != 0:
+                # e.g. loop.max_steps_exceeded — resumable with a fresh
+                # budget if the caller chooses; here: record and resume
+                # like a transient failure.
+                attempt += 1
+                if result.session_id and attempt <= max_resume_attempts:
+                    result.resume_count = attempt
+                    continue
+                result.error = (f"kimi rc={rc}: "
+                                f"{stderr.decode(errors='replace')[:2000]}")
             return result
     finally:
         if transcript_file:
