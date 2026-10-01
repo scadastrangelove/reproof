@@ -111,3 +111,25 @@ def test_transcript_and_last_assistant_parity():
         "message": {"content": [{"type": "tool_result", "content": big}]},
     }])
     assert len(r2.transcript()[0]["message"]["content"][0]["content"]) == 5000
+
+
+def test_kimi_config_toml_alias_and_key_env():
+    from reproof.agent_kimi import kimi_config_toml
+    t = kimi_config_toml("kimi-for-coding", max_steps=100,
+                         base_url="https://gw.example/v1")
+    assert 'default_model = "kimi-for-coding"' in t
+    assert '[models."kimi-for-coding"]' in t
+    assert 'api_key_env = "KIMI_MODEL_API_KEY"' in t
+    assert 'base_url = "https://gw.example/v1"' in t
+    assert "max_steps_per_turn = 100" in t
+    assert "sk-" not in t  # no key material on disk, ever
+
+
+def test_kimi_config_toml_env_fallback(monkeypatch):
+    from reproof.agent_kimi import kimi_config_toml
+    monkeypatch.setenv("KIMI_MODEL_BASE_URL", "https://env-gw/v1")
+    monkeypatch.setenv("KIMI_MODEL_PROVIDER_TYPE", "openai")
+    t = kimi_config_toml("m/x", max_steps=50)
+    assert 'base_url = "https://env-gw/v1"' in t and 'type = "openai"' in t
+    monkeypatch.delenv("KIMI_MODEL_BASE_URL")
+    assert "base_url" not in kimi_config_toml("m", max_steps=50)

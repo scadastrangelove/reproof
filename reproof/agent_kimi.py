@@ -228,6 +228,64 @@ def build_argv(container: str, prompt: str, *, model: str,
     return argv
 
 
+# Where agent_image bakes $KIMI_CODE_HOME (ENV in the base Dockerfile).
+KIMI_CODE_HOME = "/opt/reproof/kimi-home"
+
+
+def kimi_config_toml(model: str, *, max_steps: int,
+                     base_url: str | None = None,
+                     provider_type: str | None = None) -> str:
+    """Render the agent container's config.toml.
+
+    Defines the model alias the pipeline passes via ``--model``: the
+    env-synthesized ``__kimi_env_model__`` is invisible to ``-m`` (highest
+    priority, alias must exist — verified live), so a real
+    ``[providers]/[models]`` pair is required. The API key is referenced
+    with ``api_key_env`` — it stays in the container env (forwarded by
+    ``sandbox.agent_env``) and never touches disk.
+    """
+    import json as _json
+    import os as _os
+    q = lambda s: _json.dumps(s)  # JSON string escaping is TOML-compatible
+    base_url = base_url if base_url is not None \
+        else _os.environ.get("KIMI_MODEL_BASE_URL")
+    provider_type = provider_type or \
+        _os.environ.get("KIMI_MODEL_PROVIDER_TYPE") or "kimi"
+    lines = [
+        f"default_model = {q(model)}",
+        "",
+        "[providers.reproof]",
+        f"type = {q(provider_type)}",
+    ]
+    if base_url:
+        lines.append(f"base_url = {q(base_url)}")
+    lines += [
+        'api_key_env = "KIMI_MODEL_API_KEY"',
+        "",
+        f"[models.{q(model)}]",
+        'provider = "reproof"',
+        f"model = {q(model)}",
+        "max_context_size = 262144",
+        "",
+        "[loop_control]",
+        f"max_steps_per_turn = {int(max_steps)}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_kimi_config(container: str, *, model: str, max_steps: int) -> None:
+    """Write config.toml into the agent container (ADR-001 R4 budget home).
+
+    Idempotent per container; called once per run_agent before the first
+    attempt so both the model alias and the step budget match this run.
+    """
+    from . import docker_ops  # local import: agent layer must not hard-depend on docker
+    toml = kimi_config_toml(model, max_steps=max_steps)
+    docker_ops.write_file(container, f"{KIMI_CODE_HOME}/config.toml",
+                          toml.encode())
+
+
 async def run_agent(
     prompt: str,
     *,
@@ -254,6 +312,11 @@ async def run_agent(
     result = AgentResult()
     attempt = 0
     assistant_count = 0
+
+    # Model alias + step budget live in the container's config.toml: the
+    # env-synthesized model is invisible to `-m`, so the alias must exist
+    # (verified live: first canary run failed without this).
+    write_kimi_config(container, model=model, max_steps=max_turns)
 
     # Stage callers pass system_prompt/tools the way upstream passed them to
     # `claude --system-prompt --tools`. Kimi takes both via an agent Markdown
