@@ -29,6 +29,11 @@ ALLOW = {
     if h.strip()
 }
 PORT = int(os.environ.get("REPROOF_EGRESS_PORT") or 3128)
+# Idle-tunnel timeout. Streaming model APIs can pause between chunks far
+# longer than 60s (thinking phases); too small a value kills long-lived
+# agent streams mid-run (seen live: 2/3 parallel find agents died with
+# provider.connection_error while the third streamed on).
+IDLE_TIMEOUT_S = int(os.environ.get("REPROOF_EGRESS_IDLE_TIMEOUT") or 600)
 
 _HOST_RE = re.compile(r"^[a-z0-9.-]+:\d+$")
 
@@ -68,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         b.setblocking(False)
         try:
             while True:
-                r, _, _ = select.select([a, b], [], [], 60)
+                r, _, _ = select.select([a, b], [], [], IDLE_TIMEOUT_S)
                 if not r:
                     return
                 for src in r:
