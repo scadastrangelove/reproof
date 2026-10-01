@@ -112,20 +112,29 @@ proxy_ip=$(docker inspect "$PROXY_NAME" --format \
 ok "proxy ${PROXY_NAME} up on ${NET} (${proxy_ip}:3128, allow: ${ALLOW})"
 
 # ── 4. Target + agent images ────────────────────────────────────────────────
+# SETUP_TARGETS="canary rust-canary" limits the build to those targets (fresh
+# or disk-tight hosts); default builds every shipped target.
 step "Target + agent images"
-for d in targets/*/; do
-    [ -f "$d/config.yaml" ] || continue
+TARGETS=${SETUP_TARGETS:-}
+if [ -z "$TARGETS" ]; then
+    TARGETS=$(for d in targets/*/; do [ -f "$d/config.yaml" ] && basename "$d"; done)
+fi
+for t in $TARGETS; do
+    d="targets/$t/"
+    [ -f "$d/config.yaml" ] || die "no config.yaml in $d"
     tag=$(.venv/bin/python3 -c 'import sys,yaml;print(yaml.safe_load(open(sys.argv[1]))["image_tag"])' "$d/config.yaml")
     docker build -q -t "$tag" "$d" >/dev/null
     .venv/bin/python3 -c 'import sys; from reproof import agent_image; print("  ", agent_image.ensure(sys.argv[1]))' "$tag"
 done
-ok "target + agent images built"
+ok "target + agent images built ($TARGETS)"
 
 # ── 5. Verification ─────────────────────────────────────────────────────────
 step "Verification"
 # Derive the same agent-image tag agent_image.ensure() produced in step 4
 # (e.g. reproof-canary-latest-agent:2.1.1). Hardcoding drifts.
-ATAG=$(.venv/bin/python3 -c 'import sys, yaml; from reproof.agent_image import agent_tag; print(agent_tag(yaml.safe_load(open(sys.argv[1]))["image_tag"]))' targets/canary/config.yaml)
+VERIFY_TARGET=${SETUP_TARGETS:+${SETUP_TARGETS%% *}}
+VERIFY_TARGET=${VERIFY_TARGET:-canary}
+ATAG=$(.venv/bin/python3 -c 'import sys, yaml; from reproof.agent_image import agent_tag; print(agent_tag(yaml.safe_load(open(sys.argv[1]))["image_tag"]))' "targets/$VERIFY_TARGET/config.yaml")
 host_kver=$(uname -r)
 
 # The first container doubles as a cgroup probe. runsc writes cgroup files
