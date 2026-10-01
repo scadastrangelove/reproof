@@ -66,7 +66,7 @@ bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel 
 | 1 | Agent adapter + harness port | all stages ported; upstream test parity (392 passed) ✅ |
 | 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress ✅ (code-complete; live run pending a Linux host) |
 | 3 | Skills port | all 10 skills auto-discovered from `.agents/skills/` by the Kimi CLI; docs ported; quickstart verified live ✅ |
-| 4 | Benchmark parity | DVRA-3 recall on the Kimi backend measured against the recorded Claude baseline |
+| 4 | Benchmark parity | first live run done (canary 3/3 on Tamm, reports CRITICAL/REACHABLE ✅); DVRA-3 recall vs the recorded baseline pending |
 
 ## License and attribution
 
