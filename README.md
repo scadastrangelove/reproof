@@ -22,17 +22,29 @@ intentional — the pipeline issues *reproofs* to unproven agent claims.
 
 ## Status
 
-Early bootstrap. Phase 0 is risk verification of the Kimi CLI headless
-contract (see [ADR-001](docs/adr/ADR-001-agent-backend-kimi.md)); the adapter
-skeleton lives at `reproof/agent_kimi.py`.
+Phase 1 complete: the full pipeline core (find / grade / judge / report /
+recon / patch / predisclose / reattack) runs on the Kimi Code CLI backend
+(`reproof/agent_kimi.py`), with the upstream test suite green against the
+port (392 passed, 4 skipped). Phase 2 adds the sandbox entrypoint
+(`bin/reproof-sandboxed`, `scripts/setup_sandbox.sh`); an end-to-end live run
+requires a Linux host with Docker (gVisor is Linux-only).
+
+## Running (Linux host)
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+export KIMI_MODEL_NAME=... KIMI_MODEL_API_KEY=... KIMI_MODEL_BASE_URL=https://...
+scripts/setup_sandbox.sh                      # one-time: runsc, egress proxy, images
+bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel --stream
+```
 
 ## Roadmap
 
 | Phase | Goal | Done when |
 |---|---|---|
-| 0 | Verify Kimi headless contract | resume / stream-json / system-prompt / tool-restriction / max-turns behavior measured and recorded in ADR-001 |
-| 1 | Agent adapter | `agent_kimi.py` passes the `agent.py` contract tests against a stub CLI, then live against `kimi` |
-| 2 | Harness port | find → grade → judge → report runs end-to-end on a canary target under gVisor with Moonshot-only egress |
+| 0 | Verify Kimi headless contract | resume / stream-json / system-prompt / tool-restriction / max-turns behavior measured and recorded in ADR-001 ✅ |
+| 1 | Agent adapter + harness port | all stages ported; upstream test parity (392 passed) ✅ |
+| 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress |
 | 3 | Skills port | `/threat-model`, `/variant-scan`, `/triage` etc. load via `--skills-dir` and produce identical artifact schemas |
 | 4 | Benchmark parity | DVRA-3 recall on the Kimi backend measured against the recorded Claude baseline |
 

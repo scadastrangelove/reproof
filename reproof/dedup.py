@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Post-hoc crash deduplication — summary view only.
 
-  vuln-pipeline dedup results/<target>/<timestamp>/    # one batch
-  vuln-pipeline dedup results/<target>/                # all batches
+  reproof dedup results/<target>/<timestamp>/    # one batch
+  reproof dedup results/<target>/                # all batches
 
 Walks result.json files under the given root and groups crashes by
 (crash_type, top ASAN frame). Includes both crash_found and crash_rejected

@@ -23,8 +23,8 @@
 Output: ./results/<target>/<timestamp>/{result.json,find_transcript.jsonl,
 grade_transcript.jsonl,poc.bin}; reports → .../reports/bug_NN/
 
-Auth: resolved by ``reproof.auth`` (Bedrock / Vertex / ANTHROPIC_API_KEY /
-CLAUDE_CODE_OAUTH_TOKEN — one required; see docs/agent-sandbox.md).
+Auth: resolved by ``reproof.auth`` (KIMI_MODEL_NAME / KIMI_MODEL_API_KEY /
+KIMI_MODEL_BASE_URL env — all required; see docs/adr/ADR-001-agent-backend-kimi.md).
 Model: --model flag, or REPROOF_MODEL env var (required, one or the other).
 """
 from __future__ import annotations

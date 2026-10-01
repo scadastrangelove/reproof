@@ -15,7 +15,7 @@ import re
 import subprocess
 from pathlib import Path
 
-CACHE_ROOT = Path.home() / ".cache" / "vuln-pipeline" / "novelty"
+CACHE_ROOT = Path.home() / ".cache" / "reproof" / "novelty"
 NOVELTY_NOT_CHECKED = "(host-side upstream check not performed — run with --novelty to enable)"
 
 

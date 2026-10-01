@@ -137,7 +137,7 @@ _RS_FRAME_HINT = re.compile(r"^\s*\d+:\s+\S+::", re.MULTILINE)
 
 
 def detector_for_output(crash_output: str) -> ModuleType:
-    """Pick a detector by sniffing the crash text — for `vuln-pipeline dedup`,
+    """Pick a detector by sniffing the crash text — for `reproof dedup`,
     which walks result.json files that may span profiles and carries no single
     target. Android witness header → android_app; Rust markers → rust_detect;
     otherwise the ASAN parser (its assertion/summary regex also covers non-ASAN

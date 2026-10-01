@@ -82,7 +82,7 @@ async def grade_patch(
         #                   crash.
         #   network=none  — it never calls the API, so it needs no egress.
         #                   Without this the sandbox default would give it
-        #                   vp-internal (sandboxed) or bridge (--dangerously-
+        #                   reproof-internal (sandboxed) or bridge (--dangerously-
         #                   no-sandbox); the latter is full egress for a
         #                   process fed attacker-controlled input.
         # The re-attack and style-judge stages spawn their own containers with

@@ -21,7 +21,7 @@ from pathlib import Path
 PIPELINE_PREAMBLE = """\
 ## Pipeline context
 
-This agent is part of the vuln-pipeline security-research tool. The target
+This agent is part of the reproof security-research tool. The target
 under test is built at a pinned commit and runs alongside this agent inside
 a gVisor sandbox with no network egress beyond the API. The agent analyzes
 the target, crafts inputs, and observes detector output (sanitizer reports,
