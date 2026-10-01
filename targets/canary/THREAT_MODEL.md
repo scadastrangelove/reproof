@@ -7,7 +7,7 @@ from `argv[1]` into a 4 KB buffer and dispatches to one of three "parser"
 functions based on the first byte (`'A'` → `parse_alpha`, `'B'` →
 `parse_bravo`, `'C'` → `parse_charlie`). It is built with
 `gcc -O1 -fsanitize=address` inside a `gcc:14` Docker image and exists solely
-as a fast smoke-test target for the vuln-pipeline; there is no upstream, no
+as a fast smoke-test target for the reproof; there is no upstream, no
 CVE history, and no production deployment. The bugs are deliberately planted
 and documented in source comments and `README.md`.
 

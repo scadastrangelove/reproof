@@ -27,9 +27,9 @@ disclosure) on a crafted multi-record input.
 
 ```sh
 export CLAUDE_CODE_OAUTH_TOKEN=...          # or ANTHROPIC_API_KEY
-vuln-pipeline run dvra3-parser --parallel --stream --auto-focus --aggregate union --model <model>
-vuln-pipeline reattack  results/dvra3-parser/<ts>/ --parallel --aggregate union
-vuln-pipeline scorecard results/dvra3-parser/<ts>/
+reproof run dvra3-parser --parallel --stream --auto-focus --aggregate union --model <model>
+reproof reattack  results/dvra3-parser/<ts>/ --parallel --aggregate union
+reproof scorecard results/dvra3-parser/<ts>/
 ```
 
 (Add `--dangerously-no-sandbox` on a throwaway Linux box without gVisor.)

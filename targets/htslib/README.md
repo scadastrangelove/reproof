@@ -24,7 +24,7 @@ reachable.
 ## Quick start
 
 ```bash
-vuln-pipeline run htslib --auto-focus --runs 25 --parallel --stream --model <model>
+reproof run htslib --auto-focus --runs 25 --parallel --stream --model <model>
 ```
 
 The config ships with empty `focus_areas` — `--auto-focus` runs recon first.

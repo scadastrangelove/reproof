@@ -24,7 +24,7 @@ russcan has no public remote, so its source is shipped into `russcan-src/`
 # from a machine with the russcan checkout:
 rsync -a --exclude target --exclude 'build-*' --exclude vectorscan \
       /path/to/russcan/ targets/russcan/russcan-src/
-sudo docker build -t vuln-pipeline-russcan:latest targets/russcan
+sudo docker build -t reproof-russcan:latest targets/russcan
 ```
 
 ## Run (needs Anthropic auth on the host)

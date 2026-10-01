@@ -1,5 +1,5 @@
 # Fast fuzz image: reuse an existing nightly + cargo-fuzz base, swap the crate.
-FROM vuln-pipeline-lopdf-fuzz:latest
+FROM reproof-lopdf-fuzz:latest
 COPY crate /work/crate
 WORKDIR /work/crate
 CMD ["/bin/bash"]

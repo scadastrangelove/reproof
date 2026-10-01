@@ -17,18 +17,18 @@ pinned commit, both disclosed via CERT/CC VU#924114.
 ## Quick start
 
 ```bash
-vuln-pipeline run drlibs --auto-focus --runs 15 --parallel --stream --model <model>
+reproof run drlibs --auto-focus --runs 15 --parallel --stream --model <model>
 ```
 
 For the dr_flac CVE, add `--accept-dos` — it's DoS-class and the default
 quality bar will triage-and-skip it:
 
 ```bash
-vuln-pipeline run drlibs --auto-focus --runs 15 --parallel --stream --accept-dos --model <model>
+reproof run drlibs --auto-focus --runs 15 --parallel --stream --accept-dos --model <model>
 ```
 
 The config ships with empty `focus_areas` — `--auto-focus` runs recon first
-to discover them. Or run `vuln-pipeline recon drlibs` separately and inspect
+to discover them. Or run `reproof recon drlibs` separately and inspect
 the output before launching finds.
 
 ## Expected results

@@ -187,7 +187,7 @@ u32` overflow — a Track B candidate). L10 on/off re-test: **ON panic (rc 101) 
 ## cargo-fuzz — closing the L11 gap (2026-07-18)
 
 Built a real cargo-fuzz harness (`targets/lopdf/crate/fuzz/`, image
-`vuln-pipeline-lopdf-fuzz:latest` = nightly + cargo-fuzz): two targets, `load_mem` (seeded from the
+`reproof-lopdf-fuzz:latest` = nightly + cargo-fuzz): two targets, `load_mem` (seeded from the
 6 real `assets/*.pdf`) and `content_decode` (seeded + the inline-image fixture). **Fuzz build uses
 the shipping profile — `overflow-checks = false`, `debug-assertions = false`** (L10) so any crash is
 production-real, not a detector artifact.
@@ -278,7 +278,7 @@ only #1; encryption and get_page_images produced no crashes.
 
 ## Stage 2 — reattack (static→harness bridge) — DONE, L11 closed
 
-`vuln-pipeline reattack` on the 4 Track B static findings (`--findings ~/lopdf-trackb-findings.json`,
+`reproof reattack` on the 4 Track B static findings (`--findings ~/lopdf-trackb-findings.json`,
 sonnet, --parallel). The bridge routed each finding → fuzz template + sanitizer and synthesized a
 reproducing harness. **3/4 auto-reproduced:**
 

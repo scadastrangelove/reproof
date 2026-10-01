@@ -18,11 +18,11 @@ format. ~10k LOC in `src/topology/`.
 ## Quick start
 
 ```bash
-vuln-pipeline run alsa --auto-focus --runs 15 --parallel --stream --model <model>
+reproof run alsa --auto-focus --runs 15 --parallel --stream --model <model>
 ```
 
 The config ships with empty `focus_areas` — `--auto-focus` runs recon first
-to discover them. Or run `vuln-pipeline recon alsa` separately and inspect
+to discover them. Or run `reproof recon alsa` separately and inspect
 the output before launching finds.
 
 ## Expected results

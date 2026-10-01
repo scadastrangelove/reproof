@@ -1,7 +1,7 @@
 profile: cpp
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-image_tag: vuln-pipeline-alsa:latest
+image_tag: reproof-alsa:latest
 github_url: https://github.com/alsa-project/alsa-lib
 commit: 63a981865a1c7d9501ae556e28ae3bb53d015b61
 binary_path: /work/entry

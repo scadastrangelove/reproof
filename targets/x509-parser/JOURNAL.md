@@ -10,7 +10,7 @@ Experiment shape: **2×2 = {Track A autonomous pipeline, Track B curated} × {Op
 
 ## Timeline (2026-07-17)
 
-- Built `vuln-pipeline-x509-parser:latest` (nightly + ASan build-std + miri + cargo-fuzz),
+- Built `reproof-x509-parser:latest` (nightly + ASan build-std + miri + cargo-fuzz),
   `capabilities.json` = untrusted_deserialization + network_protocol_parser (→ vote budget N=3),
   driver `riptarget.rs` over `parse_x509_certificate`.
 - **Both credit pools hit their ceiling simultaneously**: Tamm OAuth `out of usage credits,

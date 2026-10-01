@@ -2,7 +2,7 @@
 # (harness/config.py). `profile: rust` selects the Rust find prompt, crash
 # detector (Miri/panic/ASAN), and grade/judge prompts — see profiles/rust/README.md.
 profile: rust
-image_tag: vuln-pipeline-rust-canary:latest
+image_tag: reproof-rust-canary:latest
 github_url: https://github.com/anthropics/defending-code-reference-harness
 commit: 0000000000000000000000000000000000000000   # local demo target; not upstreamed
 binary_path: /work/entry                            # ASAN + panic driver, reads argv[1]

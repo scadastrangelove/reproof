@@ -81,7 +81,7 @@ real `load_mem` PoC holds). Advisories + full verdicts: `poc/advisories/` (`00-A
 
 ## Stage 2 — reattack (static→harness bridge) — L11 closed properly
 
-Ran `vuln-pipeline reattack` on the 4 Track B static findings (`--findings` file). The bridge
+Ran `reproof reattack` on the 4 Track B static findings (`--findings` file). The bridge
 dispatched each to a fuzz template + sanitizer and had an agent synthesize a reproducing harness:
 
 | finding | CWE | template | verdict |

@@ -69,7 +69,7 @@ bug as terminal (ADR-4 / AR8).
 ## Via the full image (what the pipeline does)
 
 ```bash
-docker build -t vuln-pipeline-android-canary:latest targets/android-canary
+docker build -t reproof-android-canary:latest targets/android-canary
 # inside the container:
 /work/reach /work/candidates/exported-activity-launch.txt     # single candidate
 mkdir -p /poc && cp /work/candidates/*.txt /poc/              # seed the re-attack set

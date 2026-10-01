@@ -2,7 +2,7 @@
 # the Rust find prompt + Miri/panic/ASAN/hang detector + Rust grade/judge/report/
 # patch prompts. Attack surface = an untrusted serialized vectorscan DB.
 profile: rust
-image_tag: vuln-pipeline-russcan:latest
+image_tag: reproof-russcan:latest
 github_url: "local — russcan (Vectorscan→Rust port, pinned upstream a1c107e)"
 commit: "9cd5a34"
 provenance_label: "hardened local working tree derived from upstream a1c107e"

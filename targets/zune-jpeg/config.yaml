@@ -7,7 +7,7 @@
 # classic integer-overflow → alloc/index sink. capabilities: unsafe_simd +
 # network_protocol_parser (byte-surface) → run_crash_track() == true (P0.4).
 profile: rust
-image_tag: vuln-pipeline-zune-jpeg:latest
+image_tag: reproof-zune-jpeg:latest
 github_url: https://github.com/etemesi254/zune-image
 commit: "zune-jpeg-0.5.15"                     # crates.io published tarball (repo is the zune-image workspace)
 binary_path: /work/riptarget                    # decode driver, reads argv[1]

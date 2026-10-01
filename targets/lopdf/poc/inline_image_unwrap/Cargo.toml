@@ -1,5 +1,5 @@
 # Run in-image (offline, zero API quota):
-#   docker run --rm -v $PWD:/pocbox -w /pocbox vuln-pipeline-lopdf:latest \
+#   docker run --rm -v $PWD:/pocbox -w /pocbox reproof-lopdf:latest \
 #     bash -c 'cargo run --release --offline'
 [package]
 name = "inline_image_unwrap_poc"

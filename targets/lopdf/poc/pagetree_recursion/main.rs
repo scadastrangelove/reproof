@@ -1,4 +1,4 @@
-// PoC harness: docker run --rm -v $PWD:/poc vuln-pipeline-lopdf:latest \
+// PoC harness: docker run --rm -v $PWD:/poc reproof-lopdf:latest \
 //   bash -c 'cd /poc && python3 gen_deep_pages.py deep.pdf && cargo run --release --offline -- deep.pdf'
 // (needs a Cargo.toml with lopdf path-dep + [profile.release] overflow-checks=false)
 use lopdf::Document;

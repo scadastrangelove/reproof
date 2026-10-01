@@ -1,7 +1,7 @@
 profile: cpp
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-image_tag: vuln-pipeline-drlibs:latest
+image_tag: reproof-drlibs:latest
 github_url: https://github.com/mackron/dr_libs
 commit: fb1b2dfc585c
 binary_path: /work/entry

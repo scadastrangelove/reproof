@@ -1,7 +1,7 @@
 profile: cpp
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-image_tag: vuln-pipeline-htslib:latest
+image_tag: reproof-htslib:latest
 github_url: https://github.com/samtools/htslib
 commit: 86e74e065e39749d25636f8454773d9d898c5eb3
 binary_path: /work/entry

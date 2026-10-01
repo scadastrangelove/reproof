@@ -20,6 +20,26 @@ intentional — the pipeline issues *reproofs* to unproven agent claims.
   upstream of it, Anthropic's
   [defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness).
 
+## Using this repo
+
+Two ways in: **interactive skills** (no setup, safe, start here) and the
+**autonomous pipeline** (Docker + gVisor on a Linux host, scales to many
+parallel agents).
+
+- **Step 1 — Interactive skills.** Open a Kimi Code session in this repo;
+  the skills in `.agents/skills/` are auto-discovered. Say `quickstart` for
+  a 30-second orientation, then `/threat-model`, `/vuln-scan`, `/triage`
+  against `targets/rust-canary` (read-only, repo-local).
+- **Step 2 — The pipeline.** On a Linux host: `scripts/setup_sandbox.sh`
+  once, then `bin/reproof-sandboxed run rust-canary --model "$KIMI_MODEL_NAME"
+  --runs 3 --parallel --stream`. See `docs/pipeline.md`.
+- **Step 3 — Make it yours.** Port the pipeline to another stack with
+  `/customize`; adding a target is a directory under `targets/` — see
+  `targets/README.md` and `docs/customizing.md`.
+- **Step 4 — Fix what you find.** `reproof patch results/<target>/<ts>/`
+  generates candidate fixes verified on the T0→T2 + re-attack ladder —
+  see `docs/patching.md`.
+
 ## Status
 
 Phase 1 complete: the full pipeline core (find / grade / judge / report /
@@ -44,8 +64,8 @@ bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel 
 |---|---|---|
 | 0 | Verify Kimi headless contract | resume / stream-json / system-prompt / tool-restriction / max-turns behavior measured and recorded in ADR-001 ✅ |
 | 1 | Agent adapter + harness port | all stages ported; upstream test parity (392 passed) ✅ |
-| 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress |
-| 3 | Skills port | `/threat-model`, `/variant-scan`, `/triage` etc. load via `--skills-dir` and produce identical artifact schemas |
+| 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress ✅ (code-complete; live run pending a Linux host) |
+| 3 | Skills port | all 10 skills auto-discovered from `.agents/skills/` by the Kimi CLI; docs ported; quickstart verified live ✅ |
 | 4 | Benchmark parity | DVRA-3 recall on the Kimi backend measured against the recorded Claude baseline |
 
 ## License and attribution

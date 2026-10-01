@@ -23,7 +23,7 @@ separately, a 3-agent run with focus-area steering should find all three.
 ## Quick start
 
 ```bash
-vuln-pipeline run canary --runs 3 --parallel --stream --model <model>
+reproof run canary --runs 3 --parallel --stream --model <model>
 ```
 
 The config already has the three focus areas baked in — no `--auto-focus`

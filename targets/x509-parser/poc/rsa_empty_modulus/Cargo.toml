@@ -1,7 +1,7 @@
 # Regression PoC for the X509PublicKeyValidator empty-RSA-component guard.
 # Path-depends on the x509-parser crate under test (adjust `path` to your checkout).
 # Run inside the built target image (offline registry cache):
-#   docker run --rm -v $PWD:/pocbox -w /pocbox vuln-pipeline-x509-parser:latest \
+#   docker run --rm -v $PWD:/pocbox -w /pocbox reproof-x509-parser:latest \
 #     bash -c 'cargo run --quiet --offline'
 [package]
 name = "rsa_empty_modulus_poc"

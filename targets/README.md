@@ -17,7 +17,7 @@ declares a **profile**:
 
 ```yaml
 profile: cpp                            # cpp (ASAN binary) | rust (Miri/ASan/panic/hang)
-image_tag: vuln-pipeline-<name>:latest   # docker tag to build/run
+image_tag: reproof-<name>:latest   # docker tag to build/run
 github_url: https://github.com/...      # for the prompt (agent reads source, needs context)
 commit: <full-sha>                      # pin exactly what you tested
 binary_path: /work/entry                # path INSIDE the container
@@ -58,7 +58,7 @@ attack_surface: |                       # anchors the report-agent's reachabilit
 
 build_command: gcc -O1 -g -fsanitize=address -o /work/entry /work/entry.c
                                         # in-container rebuild for the patch grader (T0).
-                                        # Required for `vuln-pipeline patch`; the grader
+                                        # Required for `reproof patch`; the grader
                                         # applies the diff then runs this to recompile.
 
 test_command: cd /work/src && make check

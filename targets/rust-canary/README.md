@@ -33,7 +33,7 @@ cargo +nightly miri test miri_bug1_oob   # observe BUG-1 as UB
 Or via the full image (what the pipeline does):
 
 ```bash
-docker build -t vuln-pipeline-rust-canary:latest targets/rust-canary
+docker build -t reproof-rust-canary:latest targets/rust-canary
 # then, inside: /work/run_detectors.sh /tmp/poc.bin
 ```
 

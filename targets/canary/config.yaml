@@ -1,7 +1,7 @@
 profile: cpp
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-image_tag: vuln-pipeline-canary:latest
+image_tag: reproof-canary:latest
 # Local-only canary — no upstream. These fields are required by the loader
 # but only used for display in the find prompt.
 github_url: "(local canary target — targets/canary/entry.c)"

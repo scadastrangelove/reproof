@@ -12,10 +12,7 @@ FROM rust:1-bookworm
 WORKDIR /work
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 xxd file gdb curl ca-certificates gnupg git \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && npm i -g @anthropic-ai/claude-code \
+        python3 xxd file gdb curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 # Nightly + the detector components. NB: this rustup wants one --component per

@@ -6,7 +6,7 @@
 # a self-check that the profile (find prompt + witness detector + capability
 # routing + DISPOSITION gate) is wired correctly.
 profile: android-app
-image_tag: vuln-pipeline-android-canary:latest
+image_tag: reproof-android-canary:latest
 
 # SYNTHETIC target: there is NO upstream repo and NO real APK. The decompiled
 # tree under app/ (decoded AndroidManifest.xml + smali/) is hand-authored. The
