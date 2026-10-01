@@ -286,6 +286,28 @@ def write_kimi_config(container: str, *, model: str, max_steps: int) -> None:
                           toml.encode())
 
 
+def discover_session_id(container: str) -> str | None:
+    """Newest on-disk session id inside the agent container, or None.
+
+    Kimi's ``meta/session.resume_hint`` (the pipeline's usual session-id
+    source) only arrives at a CLEAN stream end — a mid-stream connection
+    drop never emits it, leaving nothing to resume. The CLI persists every
+    session at ``$KIMI_CODE_HOME/sessions/wd_*/session_<uuid>/`` as it
+    goes, so the newest directory is this agent's resumable state
+    (containers are one-agent-per-run, so recency is unambiguous).
+    """
+    from . import docker_ops
+    rc, out, _ = docker_ops.exec_sh(
+        container,
+        f"ls -td {KIMI_CODE_HOME}/sessions/*/session_* 2>/dev/null | head -1",
+        timeout=15,
+    )
+    if rc != 0 or not out.strip():
+        return None
+    name = out.strip().rsplit("/", 1)[-1]
+    return name if name.startswith("session_") else None
+
+
 async def run_agent(
     prompt: str,
     *,
@@ -385,6 +407,10 @@ async def run_agent(
                     proc.terminate()
                     await proc.wait()
                 attempt += 1
+                if result.session_id is None:
+                    # Mid-stream drop: no resume_hint ever arrived — fall
+                    # back to the CLI's on-disk session state.
+                    result.session_id = discover_session_id(container)
                 if result.session_id is None or attempt > max_resume_attempts:
                     result.error = f"{type(e).__name__} after {attempt} attempt(s): {e}"
                     return result
@@ -405,8 +431,13 @@ async def run_agent(
                 # budget if the caller chooses; here: record and resume
                 # like a transient failure.
                 attempt += 1
+                if result.session_id is None:
+                    result.session_id = discover_session_id(container)
                 if result.session_id and attempt <= max_resume_attempts:
                     result.resume_count = attempt
+                    backoff = min(2 ** attempt, 300)
+                    print(f"[agent] kimi rc={rc} on attempt {attempt}, "
+                          f"resuming in {backoff}s", file=sys.stderr)
                     continue
                 result.error = (f"kimi rc={rc}: "
                                 f"{stderr.decode(errors='replace')[:2000]}")

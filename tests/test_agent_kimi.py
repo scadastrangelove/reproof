@@ -133,3 +133,25 @@ def test_kimi_config_toml_env_fallback(monkeypatch):
     assert 'base_url = "https://env-gw/v1"' in t and 'type = "openai"' in t
     monkeypatch.delenv("KIMI_MODEL_BASE_URL")
     assert "base_url" not in kimi_config_toml("m", max_steps=50)
+
+
+def test_discover_session_id_parses_newest(monkeypatch):
+    from reproof import agent_kimi
+    calls = {}
+    def fake_exec_sh(container, command, timeout=None):
+        calls["cmd"] = command
+        return (0, "/opt/reproof/kimi-home/sessions/wd_work_abc/session_e961dfd1-0515-4942-97a6-16b5cb00e9f9\n", "")
+    monkeypatch.setattr("reproof.docker_ops.exec_sh", fake_exec_sh)
+    sid = agent_kimi.discover_session_id("c")
+    assert sid == "session_e961dfd1-0515-4942-97a6-16b5cb00e9f9"
+    assert "sessions/*/session_*" in calls["cmd"]
+
+
+def test_discover_session_id_empty(monkeypatch):
+    from reproof import agent_kimi
+    monkeypatch.setattr("reproof.docker_ops.exec_sh",
+                        lambda *a, **k: (0, "", ""))
+    assert agent_kimi.discover_session_id("c") is None
+    monkeypatch.setattr("reproof.docker_ops.exec_sh",
+                        lambda *a, **k: (1, "", "no such dir"))
+    assert agent_kimi.discover_session_id("c") is None
