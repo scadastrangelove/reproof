@@ -64,3 +64,28 @@ def test_find_tagged_message_scans_backwards():
         {"role": "assistant", "content": "Done!"},
     ])
     assert parse_xml_tag(r.find_tagged_message("poc_path"), "poc_path") == "/tmp/x"
+
+
+# ── argv / agent-file construction (ADR-001 decisions) ───────────────────────
+
+def test_agent_file_on_first_attempt_only(tmp_path):
+    from reproof.agent_kimi import build_argv
+    first = build_argv("c", "p", model="m", agent_file="/work/find.md",
+                       session_id=None)
+    resumed = build_argv("c", "p", model="m", agent_file="/work/find.md",
+                         session_id="session_x")
+    assert "--agent-file" in first and "--session" not in first
+    assert "--session" in resumed and "--agent-file" not in resumed
+
+
+def test_write_agent_file_tools_semantics(tmp_path):
+    from reproof.agent_kimi import write_agent_file
+    p = tmp_path / "judge.md"
+    write_agent_file(str(p), name="judge", description="d", tools=[],
+                     system_prompt="You judge.")
+    body = p.read_text()
+    assert "tools: []\n" in body and "You judge." in body
+    p2 = tmp_path / "find.md"
+    write_agent_file(str(p2), name="find", description="d",
+                     tools=["Read", "Write", "Bash"], system_prompt="You find.")
+    assert "tools: [Read, Write, Bash]" in p2.read_text()
