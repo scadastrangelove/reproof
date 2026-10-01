@@ -27,12 +27,12 @@ rsync -a --exclude target --exclude 'build-*' --exclude vectorscan \
 sudo docker build -t reproof-russcan:latest targets/russcan
 ```
 
-## Run (needs Anthropic auth on the host)
+## Run (needs Kimi auth on the host)
 
-The agents run `docker exec … claude -p` inside the image; auth is passed as
-`ANTHROPIC_API_KEY` at run time. No gVisor here → use the sandbox override.
+The agents run `docker exec … kimi -p` inside the image; auth is passed as
+`KIMI_MODEL_*` env at run time. No gVisor here → use the sandbox override.
 
 ```bash
-export ANTHROPIC_API_KEY=…            # your key, on the host
-python -m harness.cli run targets/russcan --dangerously-no-sandbox   # or bin/vp-sandboxed
+export KIMI_MODEL_NAME=… KIMI_MODEL_API_KEY=… KIMI_MODEL_BASE_URL=…
+reproof run targets/russcan --dangerously-no-sandbox   # or bin/reproof-sandboxed
 ```

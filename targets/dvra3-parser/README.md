@@ -26,7 +26,7 @@ disclosure) on a crafted multi-record input.
 ## Run it
 
 ```sh
-export CLAUDE_CODE_OAUTH_TOKEN=...          # or ANTHROPIC_API_KEY
+export KIMI_MODEL_NAME=... KIMI_MODEL_API_KEY=... KIMI_MODEL_BASE_URL=...
 reproof run dvra3-parser --parallel --stream --auto-focus --aggregate union --model <model>
 reproof reattack  results/dvra3-parser/<ts>/ --parallel --aggregate union
 reproof scorecard results/dvra3-parser/<ts>/
