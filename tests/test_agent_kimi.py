@@ -89,3 +89,25 @@ def test_write_agent_file_tools_semantics(tmp_path):
     write_agent_file(str(p2), name="find", description="d",
                      tools=["Read", "Write", "Bash"], system_prompt="You find.")
     assert "tools: [Read, Write, Bash]" in p2.read_text()
+
+
+def test_transcript_and_last_assistant_parity():
+    from reproof.agent_kimi import AgentResult
+    big = "A" * 9000
+    r = AgentResult(messages=[
+        {"role": "meta", "type": "system.version", "version": "2.1.1"},
+        {"role": "assistant", "content": "first"},
+        {"role": "tool", "content": big},
+        {"role": "assistant", "content": "last <poc_path>/work/poc</poc_path>"},
+    ])
+    assert r.last_assistant_message() == "last <poc_path>/work/poc</poc_path>"
+    assert r.find_tagged_message("poc_path").startswith("last")
+    t = r.transcript()
+    assert len(t[2]["content"]) == 5000          # tool output clipped
+    assert t[1]["content"] == "first"            # assistant text untouched
+    # upstream-shaped messages clip too
+    r2 = AgentResult(messages=[{
+        "type": "user",
+        "message": {"content": [{"type": "tool_result", "content": big}]},
+    }])
+    assert len(r2.transcript()[0]["message"]["content"][0]["content"]) == 5000

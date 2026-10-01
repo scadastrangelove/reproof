@@ -93,6 +93,57 @@ class AgentResult:
                 return text
         return last_assistant
 
+    def last_assistant_message(self) -> str:
+        """Last assistant text in the run ("" if none). Upstream parity."""
+        for msg in reversed(self.messages):
+            text = normalize_message_text(msg)
+            if text is not None:
+                return text
+        return ""
+
+    def transcript(self) -> list[dict]:
+        """JSON-serializable transcript for persistence (tool output clipped)."""
+        return [_truncate_tool_results(m) for m in self.messages]
+
+
+def _truncate_tool_results(msg: dict) -> dict:
+    """Clip large tool output (ASAN traces) for transcript persistence.
+
+    Handles both event shapes: Kimi stream-json (``role: tool`` with string
+    or block-list ``content``) and the upstream Anthropic shape (``type:
+    user`` with ``tool_result`` blocks inside ``message.content``).
+    """
+    if msg.get("role") == "tool":
+        content = msg.get("content")
+        if isinstance(content, str) and len(content) > 5000:
+            return {**msg, "content": content[:5000]}
+        if isinstance(content, list):
+            return {**msg, "content": [
+                ({**x, "text": x.get("text", "")[:5000]}
+                 if isinstance(x, dict) and len(x.get("text", "")) > 5000 else x)
+                for x in content[:10]
+            ]}
+        return msg
+    if msg.get("type") != "user":
+        return msg
+    inner = msg.get("message", {})
+    content = inner.get("content")
+    if not isinstance(content, list):
+        return msg
+    clipped = []
+    for b in content:
+        if isinstance(b, dict) and b.get("type") == "tool_result":
+            c = b.get("content")
+            if isinstance(c, str):
+                b = {**b, "content": c[:5000]}
+            elif isinstance(c, list):
+                b = {**b, "content": [
+                    ({**x, "text": x.get("text", "")[:5000]} if isinstance(x, dict) else x)
+                    for x in c[:10]
+                ]}
+        clipped.append(b)
+    return {**msg, "message": {**inner, "content": clipped}}
+
 
 def normalize_message_text(raw: dict) -> str | None:
     """Plain assistant text from one event, or None for non-text events.
