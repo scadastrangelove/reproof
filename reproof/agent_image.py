@@ -6,7 +6,7 @@
 
 The agent runs *inside* its container, so the container needs the CLI. To
 avoid one node+npm install per target, ``ensure()`` builds a shared
-``reproof-agent-base:<cli-version>`` once (gcc:14 + node + pinned CLI +
+``reproof-agent-base:<cli-version>-<layer-rev>`` once (gcc:14 + node 22 + pinned CLI +
 a $KIMI_CODE_HOME with loop_control) and then layers each target's ``/work``
 on top via ``COPY --from``. Target Dockerfiles stay unchanged (single source
 of truth for the binary build).
@@ -26,7 +26,10 @@ import textwrap
 from . import docker_ops
 
 KIMI_CODE_VERSION = "2.1.1"  # pinned to the Phase-0-verified CLI
-BASE_TAG = f"reproof-agent-base:{KIMI_CODE_VERSION}"
+# Base-layer recipe revision: bump when the base Dockerfile changes (Node
+# major, system packages) so cached pre-change bases are not silently reused.
+BASE_LAYER_REV = "node22"
+BASE_TAG = f"reproof-agent-base:{KIMI_CODE_VERSION}-{BASE_LAYER_REV}"
 _TAG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/:-]*$")
 
 # Default step budget inside the container; the run entrypoint overrides it
@@ -59,11 +62,17 @@ def _ensure_base() -> str:
     # Dockerfiles install them too, but ``ensure()`` only copies /work from the
     # target image — apt packages outside /work don't survive the COPY --from.
     # Anything the prompts promise has to live in this base layer.
+    #
+    # Node 22 via NodeSource, NOT apt's nodejs: kimi-code 2.1.x imports
+    # ``createZstdDecompress`` from node:zlib, which only exists in Node
+    # >=22.15 — Debian's Node 20 crashes the CLI at startup.
     _build(
         textwrap.dedent(f"""\
             FROM gcc:14
             RUN apt-get update && \\
-                apt-get install -y --no-install-recommends nodejs npm ca-certificates xxd gdb && \\
+                apt-get install -y --no-install-recommends ca-certificates curl gnupg xxd gdb && \\
+                curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \\
+                apt-get install -y --no-install-recommends nodejs && \\
                 rm -rf /var/lib/apt/lists/* && \\
                 npm install -g @moonshot-ai/kimi-code@{KIMI_CODE_VERSION}
             ENV KIMI_CODE_HOME=/opt/reproof/kimi-home
