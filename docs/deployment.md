@@ -12,6 +12,9 @@ end-to-end on the Kimi backend.
 - Python 3.12+, git, ~10 GB free disk for the canary + rust-canary images
   (all 28 targets need ~40–60 GB — use `SETUP_TARGETS` to build a subset)
 - Outbound HTTPS to your model endpoint (default `agent-gw.kimi.com:443`)
+- Note: a default full-target setup also builds `targets/russcan`, whose
+  source (`russcan-src/`) is shipped out-of-band and gitignored — without
+  it the full loop fails there; use `SETUP_TARGETS` unless you have it.
 
 ## Layout
 
