@@ -1,0 +1,46 @@
+# Campaign-benchmark target: hyperium/h2 @ v0.4.15 (pin 9416dc87), the pin our
+# 3-lens campaign audited (JOURNAL.md). The client-role PUSH_PROMISE state-machine
+# panic was fixed upstream in h2 0.4.16. The oracle PoCs live in ./poc on the
+# host only — they are NOT copied into the image.
+profile: rust
+image_tag: reproof-h2:latest
+github_url: "https://github.com/hyperium/h2"
+commit: "9416dc875da6d6b900eedc22636413c62dae912b"
+provenance_label: "h2 v0.4.15 pinned pre-fix; campaign benchmark (fixed upstream in 0.4.16), oracle held out"
+binary_path: /work/riptarget
+source_root: /work/h2
+
+reattack_harness: /work/run_detectors.sh
+
+# In-container rebuild for the patch grader (T0): the driver path-deps on
+# /work/h2, so a patch to the crate rebuilds straight into the binary.
+build_command: >-
+  cd /work/driver && cargo build --bin riptarget &&
+  cp target/debug/riptarget /work/riptarget
+
+# Regression suite for the patch grader (T2).
+test_command: cd /work/h2 && cargo test --lib
+
+memory_limit: 6g
+build_timeout_s: 3600
+
+# Lens policy (see README.md):
+#   BLIND        = this config ships NO focus_areas; run without --auto-focus.
+#   THREAT-MODEL = run with --auto-focus (recon derives areas from the source).
+#   CVE-SEEDED   = run with temporary focus_areas naming the public advisory;
+#                  never commit seeded areas to this file.
+known_bugs: []   # benchmark: the pipeline must rediscover, not be told
+
+attack_surface: |
+  The h2 crate at /work/h2 (an HTTP/2 implementation). The driver
+  /work/riptarget reads a file of raw bytes and plays them as a malicious
+  SERVER's frame stream to a default-config native h2 client over an in-memory
+  channel, after a normal handshake (client preface + SETTINGS, one GET
+  request answered with a 200 response HEADERS, the stream left open). The
+  input bytes are every subsequent frame on the wire, verbatim: 9-byte frame
+  header (24-bit length, type, flags, 31-bit stream id) + payload, frame after
+  frame; HPACK header blocks are the caller's responsibility.
+  A panic / abort in the client reachable from those bytes (exit code >= 101)
+  is a finding. A clean protocol rejection (GOAWAY, RST_STREAM, connection
+  error, closed connection) is correct handling, NOT a finding. The client
+  config is the h2 default — every default-on behaviour is in scope.

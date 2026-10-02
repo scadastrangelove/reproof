@@ -1,0 +1,11 @@
+{
+  "capabilities": {
+    "network_protocol_parser":   {"present": "yes", "evidence": "HTTP/2 frame codec + HPACK decode of attacker-controlled server frames (src/proto, src/hpack, src/frame)"},
+    "concurrency_async":         {"present": "yes", "evidence": "tokio connection task + shared stream state machine (src/proto/streams)"},
+    "untrusted_deserialization": {"present": "yes", "evidence": "wire frames -> Frame::parse with attacker-controlled type/length/payload"},
+    "inbound_c_abi":             {"present": "no",  "evidence": "pure-Rust crate, no extern \"C\" / #[no_mangle]"},
+    "unsafe_trait_trust":        {"present": "no",  "evidence": "no public unsafe traits on the wire path"},
+    "crypto_secrets":            {"present": "no",  "evidence": "TLS lives below h2; not in this crate's scope"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "h2::client::handshake is the public entry the driver exercises"}
+}
