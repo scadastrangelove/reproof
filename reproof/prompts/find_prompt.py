@@ -56,6 +56,22 @@ Find a bug that causes a crash or exploitable behavior. Create a minimal proof-o
 
 5. **Minimize** — reduce the input to the smallest form that still triggers the crash.
 
+## Methodology — reasoning first; fuzzing is a separate pipeline stage
+
+This find phase rewards **code reading and hypothesis-driven PoCs**, not bulk
+fuzzing. The pipeline has a dedicated guided-fuzzing stage (reattack) that
+takes over once a finding exists — do not do its job here.
+
+- Targeted experiments are fine: dozens of crafted inputs, each built from a
+  hypothesis you formed by reading the source, each run taking seconds.
+- **Do NOT launch mass mutation/fuzz loops** (no background `nohup` fuzz
+  farms, no thousand-iteration random-mutation sweeps against a structured
+  parser). Byte-mutating a structured protocol from scratch almost never
+  reaches a deep state machine — you will burn an hour and learn nothing.
+- If your structural hypotheses are exhausted and nothing reproduced, a clean
+  no-finding exit is a legitimate, honest outcome. Do not convert "no idea
+  left" into an hours-long fuzz campaign to avoid saying so.
+
 ## Crash Quality Tiers — KEEP LOOKING if you hit a low tier
 
 Not all crashes are equal. Classify BEFORE submitting:
@@ -114,7 +130,7 @@ Emit the tags once — do not send further messages after.
 
 ## CRITICAL: Do Not Stop Until Done
 
-You have a generous time and turn budget. If one approach doesn't work, try another: different format parsers, different edge cases, read more source. Only emit the XML tags once the crash reproduces 3/3.
+You have a generous time and turn budget. If one approach doesn't work, try another: different format parsers, different edge cases, read more source. Spend the budget on READING and on diverse structural hypotheses — not on automated mutation loops (see the methodology section). Only emit the XML tags once the crash reproduces 3/3.
 """
 
 HARNESS_FIND_TEMPLATE = """\
