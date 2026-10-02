@@ -87,6 +87,35 @@ bugs live in four places — hunt these:
      `Err(...)` return (graceful error handling is correct, not a bug)
 5. **Minimize** to the smallest input that still triggers it.
 
+## Methodology — reasoning first; fuzzing is a separate pipeline stage
+
+This find phase rewards **code reading and hypothesis-driven PoCs**, not bulk
+fuzzing. The pipeline has a dedicated guided-fuzzing stage (the find→fuzz
+reattack bridge) that takes over once a finding exists — do not do its job
+here.
+
+- Targeted experiments are fine: dozens of crafted inputs, each built from a
+  hypothesis you formed by reading the source, each run taking seconds.
+- **Do NOT launch mass mutation/fuzz loops** (no background `nohup` fuzz
+  farms, no thousand-iteration random-mutation sweeps against a structured
+  protocol). Byte-mutating a structured format from scratch almost never
+  reaches a deep state machine — it burns an hour and learns nothing.
+- If your structural hypotheses are exhausted and nothing reproduced, a clean
+  no-finding exit is a legitimate, honest outcome — far better than converting
+  "no idea left" into an hours-long fuzz campaign.
+
+## Logic-oracle targets
+
+Most targets declare a crash oracle, but some declare a **logic oracle**
+instead: the driver's source (read `/work/driver/`) and harness document a
+success signal (e.g. a specific exit code / marker) that may fire ONLY when a
+security condition in the crate is violated — a broken cryptographic relation
+(key-less recovery, downgrade), an injection reaching a sink, an authz bypass,
+silent data loss across a trust boundary. If this target is such a one,
+triggering the declared oracle via the crate's real production code path IS
+the finding: submit it with `<crash_type>logic-oracle:<class></crash_type>`
+and the observed signal in `<crash_output>`.
+
 ## Crash Quality Tiers — KEEP LOOKING if you hit a low tier
 
 **HIGH VALUE — submit:**
@@ -179,7 +208,11 @@ site + crash class. Not a duplicate.
 
 `<crash_type>` is one of: `miri-ub:<kind>`, `asan-<type>`, `panic-index-oob`,
 `panic-slice-range`, `panic-unwrap-none`, `panic-unwrap-err`,
-`panic-arith-overflow`, `hang`, `abort`. Save the PoC before emitting tags.
+`panic-arith-overflow`, `hang`, `abort`, `logic-oracle:<class>` (for targets
+whose declared oracle is a logic signal — see "Logic-oracle targets" above;
+`<class>` names the violated condition, e.g. `logic-oracle:crypto-key-recovery`,
+`logic-oracle:injection`, `logic-oracle:ssrf`, `logic-oracle:authz-bypass`).
+Save the PoC before emitting tags.
 
 **`<dup_check>` is required.** Key on the crash SITE (top project frame:
 function + file:line) plus the crash class — the same root cause shows as a
@@ -232,9 +265,12 @@ miss. Use it sparingly — only when more code, not more effort, is the blocker.
 
 ## CRITICAL: Do Not Stop Until Done
 
-Generous budget. If one field/parser is a dead end, try another (a sibling entry
-point, a different record type, the delayed/chained path). Only emit tags once
-the crash reproduces 3/3 via `{reattack_harness}`.
+Generous budget — spend it on **reading code and testing structural
+hypotheses**, not on automated mutation loops (see "Methodology" above: bulk
+fuzzing belongs to the pipeline's separate find→fuzz stage, not to you). If
+one field/parser is a dead end, try another (a sibling entry point, a
+different record type, the delayed/chained path). Only emit tags once the
+crash reproduces 3/3 via `{reattack_harness}`.
 """
 
 # Post-patch re-attack template: same taxonomy, harness-driven (mirror of the
