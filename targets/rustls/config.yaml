@@ -1,0 +1,43 @@
+# Campaign-benchmark target: rustls @ 0.24.0-dev.1 (pin bd9f7f59aa79), the pin
+# our 3-lens campaign audited (JOURNAL.md). Ground truth: QUIC suite-compatibility
+# is not enforced during negotiation -> pre-auth unwrap panic
+# (tls13/key_schedule.rs), fixed upstream by PR #3173 (merged 7299721a).
+# Filed as GHSA-j99h-2h74-pcqx. Oracle PoCs live in ./poc on the host only.
+profile: rust
+image_tag: reproof-rustls:latest
+github_url: "https://github.com/rustls/rustls"
+commit: "bd9f7f59aa79"
+provenance_label: "rustls 0.24.0-dev.1 pinned pre-fix; campaign benchmark (fixed by PR #3173), oracle held out"
+binary_path: /work/riptarget
+source_root: /work/rustls
+
+reattack_harness: /work/run_detectors.sh
+
+# In-container rebuild for the patch grader (T0): path deps on /work/rustls.
+build_command: >-
+  cd /work/driver && cargo build --bin riptarget &&
+  cp target/debug/riptarget /work/riptarget
+
+# Regression suite for the patch grader (T2).
+test_command: cd /work/rustls/rustls && cargo test --lib
+
+memory_limit: 6g
+build_timeout_s: 3600
+
+# Lens policy (see README.md): BLIND = no focus_areas + no --auto-focus;
+# THREAT-MODEL = --auto-focus; CVE-SEEDED = temporary focus_areas naming
+# GHSA-j99h-2h74-pcqx (never committed).
+known_bugs: []   # benchmark: the pipeline must rediscover, not be told
+
+attack_surface: |
+  The rustls workspace at /work/rustls (TLS implementation). The driver
+  /work/riptarget builds a QUIC server connection (rustls::quic::ServerConnection,
+  QUIC v1) over a hand-assembled mixed CryptoProvider — one QUIC-capable TLS1.3
+  suite plus a clone of another real suite with QUIC support opted out (a
+  documented, supported provider shape) — then feeds the input file verbatim to
+  server.read_hs(): the bytes are TLS handshake messages exactly as carried by
+  QUIC CRYPTO frames (no TLS record layer: each message is type(1) | length(3)
+  big-endian | payload), i.e. the attacker's first flight, typically a
+  ClientHello. A panic / abort reachable from those bytes (exit code >= 101)
+  is a finding. A graceful Err (the flight is rejected) is correct handling,
+  NOT a finding.

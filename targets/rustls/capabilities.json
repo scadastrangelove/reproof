@@ -1,0 +1,11 @@
+{
+  "capabilities": {
+    "network_protocol_parser":   {"present": "yes", "evidence": "TLS handshake message decode + negotiation from attacker bytes (rustls/src/msgs, server/hs.rs)"},
+    "untrusted_deserialization": {"present": "yes", "evidence": "pre-auth ClientHello parse: extensions, cipher suite lists, key shares"},
+    "concurrency_async":         {"present": "no",  "evidence": "sans-IO state machine driven synchronously by read_hs()"},
+    "crypto_secrets":            {"present": "yes", "evidence": "key schedule / suite parameter handling (tls13/key_schedule.rs) — logic oracle, not constant-time"},
+    "inbound_c_abi":             {"present": "no",  "evidence": "pure-Rust crate (#![forbid(unsafe_code)] on the wire-facing crate)"},
+    "unsafe_trait_trust":        {"present": "no",  "evidence": "no public unsafe traits on the handshake path"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "quic::ServerConnection::new + read_hs are the public API the driver exercises"}
+}

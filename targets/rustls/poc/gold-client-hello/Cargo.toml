@@ -1,0 +1,9 @@
+[package]
+name = "gold-client-hello"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rustls = { git = "https://github.com/rustls/rustls", rev = "bd9f7f59aa79" }
+rustls-test = { git = "https://github.com/rustls/rustls", rev = "bd9f7f59aa79" }

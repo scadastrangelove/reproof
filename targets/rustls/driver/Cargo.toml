@@ -1,0 +1,14 @@
+[package]
+name = "rustls-target-driver"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "riptarget"
+path = "src/main.rs"
+
+[dependencies]
+rustls = { path = "/work/rustls/rustls" }
+rustls-ring = { path = "/work/rustls/rustls-ring" }
+rustls-test = { path = "/work/rustls/rustls-test" }
