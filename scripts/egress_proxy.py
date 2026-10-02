@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 import re
-import select
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -69,27 +68,44 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _pump(a: socket.socket, b: socket.socket) -> None:
-        a.setblocking(False)
-        b.setblocking(False)
-        try:
-            while True:
-                r, _, _ = select.select([a, b], [], [], IDLE_TIMEOUT_S)
-                if not r:
-                    return
-                for src in r:
-                    dst = b if src is a else a
+        # Two blocking forwarder threads. The previous single-loop
+        # non-blocking version called sendall() on non-blocking sockets:
+        # a large request body (fat agent context) overflowed the upstream
+        # send buffer, sendall raised EAGAIN (an OSError), the handler
+        # swallowed it and tore down the tunnel — the client saw
+        # "Connection reset by peer" on any request above ~100 KB.
+        # Blocking sendall applies backpressure correctly; the per-socket
+        # timeout still reaps tunnels idle past IDLE_TIMEOUT_S.
+        import threading
+        a.settimeout(IDLE_TIMEOUT_S)
+        b.settimeout(IDLE_TIMEOUT_S)
+
+        def forward(src: socket.socket, dst: socket.socket) -> None:
+            try:
+                while True:
                     data = src.recv(65536)
                     if not data:
                         return
                     dst.sendall(data)
-        except OSError:
-            pass
-        finally:
-            for s in (a, b):
+            except OSError:
+                pass
+            finally:
                 try:
-                    s.close()
+                    dst.shutdown(socket.SHUT_WR)
                 except OSError:
                     pass
+
+        t1 = threading.Thread(target=forward, args=(a, b), daemon=True)
+        t2 = threading.Thread(target=forward, args=(b, a), daemon=True)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+        for s in (a, b):
+            try:
+                s.close()
+            except OSError:
+                pass
 
     def log_message(self, format, *args):  # noqa: A002 — base sig
         pass
