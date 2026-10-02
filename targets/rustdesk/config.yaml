@@ -1,0 +1,49 @@
+# Campaign-benchmark target: rustdesk/hbb_common @ 69cea8da, the pin our
+# 2026-08 3-lens campaign audited (JOURNAL.md). Ground truth: nonce reuse in
+# the production TCP transport encryption (Encrypt::enc/get_nonce — one shared
+# key, both directions, identical seqnum-derived nonces, no direction byte) =>
+# two-time pad, key-less plaintext recovery by a relay (High, dynamically
+# confirmed on the real hbb_common in the campaign; see JOURNAL.md 2026-08-04).
+# The oracle lives in the challenge design, not in any shipped PoC file.
+profile: rust
+image_tag: reproof-rustdesk:latest
+github_url: "https://github.com/rustdesk/hbb_common"
+commit: "69cea8da"
+provenance_label: "hbb_common pinned at the campaign commit; benchmark oracle = build-time challenge, secrets never in the image"
+binary_path: /work/riptarget
+source_root: /work/hbb_common
+
+reattack_harness: /work/run_detectors.sh
+
+# In-container rebuild for the patch grader (T0). NOTE: for this target a real
+# fix changes the wire behaviour, so the fixed challenge must be regenerated
+# (rebuild the gen stage) — the patch-phase T1 tier against the ORIGINAL
+# challenge is not meaningful here; verify fixes via the reattack ladder.
+build_command: >-
+  cd /work/driver && cargo build --release --bin riptarget &&
+  cp target/release/riptarget /work/riptarget
+
+test_command: cd /work/hbb_common && cargo test --lib
+
+memory_limit: 6g
+build_timeout_s: 3600
+
+# Lens policy (see README.md): BLIND = no focus_areas + no --auto-focus;
+# THREAT-MODEL = --auto-focus; CVE-SEEDED = temporary focus_areas naming the
+# nonce-reuse class (never committed).
+known_bugs: []   # benchmark: the pipeline must rediscover, not be told
+
+attack_surface: |
+  The hbb_common crate at /work/hbb_common — RustDesk's shared library, which
+  implements the product's encrypted TCP transport (src/tcp.rs) and rendezvous
+  protobuf messaging. The driver /work/riptarget holds a challenge generated
+  at image build time with the crate's REAL production encryption path: two
+  peers sharing one symmetric transport key each sent their first message on
+  such a connection. Public material (printed by the driver on every run and
+  stored at /work/challenge.json): peer A's first plaintext m_a (known to a
+  relay — protocols' first messages are predictable), peer A's first on-wire
+  ciphertext c_a, and peer B's first on-wire ciphertext c_b. The input file
+  must contain peer B's first plaintext m_b, exact bytes (checked by sha256).
+  Exit code 101 = correct recovery = finding. Anything else exits 0. The
+  answer is derivable only from the crate's actual cryptographic behaviour —
+  m_b itself exists nowhere in the image.

@@ -1,0 +1,12 @@
+[package]
+name = "rustdesk-challenge-gen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hbb_common = { path = "/work/hbb_common" }
+sodiumoxide = "0.2"
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"

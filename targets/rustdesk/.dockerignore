@@ -1,0 +1,6 @@
+# Oracle hygiene: campaign artifacts never enter the build context.
+poc/
+JOURNAL.md
+THREAT_MODEL.md
+README.md
+.dockerignore

@@ -1,0 +1,11 @@
+{
+  "capabilities": {
+    "crypto_secrets":            {"present": "yes", "evidence": "symmetric key + nonce construction in the TCP transport encryption (src/tcp.rs Encrypt)"},
+    "network_protocol_parser":   {"present": "yes", "evidence": "rendezvous/message protobuf over TCP (src/protos, framing in src/tcp.rs)"},
+    "untrusted_deserialization": {"present": "yes", "evidence": "protobuf decode of peer-controlled messages"},
+    "concurrency_async":         {"present": "yes", "evidence": "tokio framed streams"},
+    "inbound_c_abi":             {"present": "no",  "evidence": "no extern C surface in hbb_common itself (codec FFI lives in the app crate, out of scope)"},
+    "unsafe_trait_trust":        {"present": "no",  "evidence": "no public unsafe traits"}
+  },
+  "reachable_from_public_api": {"present": "yes", "evidence": "Encrypt is the production transport encryption used by both peers"}
+}
