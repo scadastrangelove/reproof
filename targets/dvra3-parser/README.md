@@ -51,6 +51,26 @@ DVRA oracle held out so the find agent worked blind:
 The blind find agent independently derived the exact input the benchmark authors
 planted — a clean end-to-end reproduction of DVRA-003, confirmed dynamically.
 
+## Parity record — Kimi Code CLI backend (reproof, 2026-10-01)
+
+Same target, same commands, Kimi Code CLI 2.1.1 (`kimi-for-coding`) behind the
+gVisor sandbox + egress proxy (host `Tamm`, results dir
+`results/dvra3-parser/20261001T215518Z/`):
+
+| stage | Claude baseline | Kimi backend |
+|---|---|---|
+| recon → find×3 (union-of-N) | 2/3 `crash_found` | **2/3 `crash_found`** (votes 2/3, both passed grade) |
+| find PoC | gold-seed-identical | **gold-seed-identical** (`445652410201021b000201aa`) |
+| grade → report | 10/10, MEDIUM | **10/10, MEDIUM** |
+| reattack | 2/2 reproduced | **1/1 reproduced** (`byte_parser.rs` / ASan) |
+| scorecard | exit 0 | **exit 0** |
+
+Backend bugs the live benchmark exposed (all fixed the same day, see
+`docs/deployment.md` and git history): Node 22 required in the agent image;
+`--model` needs a real config alias; resume-hint absent on mid-stream drops
+(on-disk session discovery added); the egress proxy dropped fat request
+bodies (EAGAIN in a non-blocking pump) once agent context exceeded ~100 KB.
+
 ## The broader experiment
 
 This target is the *dynamic* slice — 1 of dvra-3's 10 gold findings (the one clean
