@@ -15,11 +15,15 @@ Claude-era campaigns found?
 
 ## Results (find-level rediscovery of the ground-truth bug)
 
-| Lens | h2 | rustls | rustdesk |
+| Lens | h2 ⚠ | rustls | rustdesk |
 |---|---|---|---|
-| **blind** | **1/3** (run 0, report 10/10 HIGH) | **2/3** (runs 0,1; 2 grade-passed) | **2/3 votes** (run 0 grade-passed; run 1 grade-rejected; report 10/10 CRITICAL) |
-| **threat-model** (`--auto-focus`) | **1/3** (run 1; runs 0,2 `agent_failed` — kimi rc=137, infra) | **1/3** (run 1) | **2/3 votes** (runs 0,1; both grade-rejected) |
-| **CVE-seeded** (temp `focus_areas`) | **1/3** (run 2, report 10/10 HIGH) | **2/3** (runs 1,2; 2 grade-passed) | **2/3 votes** (runs 1,2; both grade-rejected) |
+| **blind** | **1/3** (run 0, report 10/10 HIGH) ⚠ | **2/3** (runs 0,1; 2 grade-passed) | **2/3 votes** (run 0 grade-passed; run 1 grade-rejected; report 10/10 CRITICAL) |
+| **threat-model** (`--auto-focus`) | **1/3** (run 1; runs 0,2 `agent_failed` — kimi rc=137, infra) ⚠ | **1/3** (run 1) | **2/3 votes** (runs 0,1; both grade-rejected) |
+| **CVE-seeded** (temp `focus_areas`) | **1/3** (run 2, report 10/10 HIGH) ⚠ | **2/3** (runs 1,2; 2 grade-passed) | **2/3 votes** (runs 1,2; both grade-rejected) |
+
+⚠ h2 rows: git-archaeology-assisted — all three finding runs read the
+upstream fix commit before the PoC (target image ships full `.git`; see
+"Prompt fix" section's taint caveat and docs/port-fidelity-audit.md).
 
 **Every cell rediscovered the exact campaign bug** — same crash site on
 h2/rustls, same XOR key-less recovery on rustdesk. Time-to-find: rustdesk
@@ -83,16 +87,35 @@ both finds submitted `logic-oracle:crypto-key-recovery`; both grades
 **10/10 HIGH** with the grader evidence reading "64-byte PoC = exact m_b. All
 3 runs: PWNED + exit 101; mutated control rejected."
 
-### Re-run of the grade-affected cells (2026-10-03, in progress)
+### Re-run of the grade-affected cells (2026-10-03, fixed prompts)
 
 The fix only affects rustdesk — h2 and rustls had zero grade rejections
 (their misses were find-side `no_crash_found` / infra `agent_failed`). All
-three rustdesk lens cells are being re-run with the fixed prompts, same
-protocol (`--runs 3 --parallel --stream`; TM = `--auto-focus`; CVE = temp
-single-area `focus_areas`, reverted after). Results to be appended here.
+three rustdesk lens cells were re-run with the fixed prompts, same protocol
+(`--runs 3 --parallel --stream`; TM = `--auto-focus`; CVE = temp single-area
+`focus_areas`, reverted after). Result dirs: blind `20261003T043820Z`, TM
+`20261003T045253Z`, CVE `20261003T050546Z`.
 
 | Lens | Pre-fix | Post-fix re-run |
 |---|---|---|
-| **blind** | 2/3 votes (run 1 grade-rejected) | *(running)* |
-| **threat-model** | 2/3 votes (runs 0,1 grade-rejected) | *(running)* |
-| **CVE-seeded** | 2/3 votes (runs 1,2 grade-rejected) | *(running)* |
+| **blind** | 2/3 votes (run 1 grade-rejected) | **3/3 finds, 3/3 grade PASS 1.0**; reports 10/10 HIGH + 10/10 CRITICAL |
+| **threat-model** | 2/3 votes (runs 0,1 grade-rejected) | **1/3 find** (runs 1,2 honest no_crash), grade PASS 1.0, report 10/10 HIGH |
+| **CVE-seeded** | 2/3 votes (runs 1,2 grade-rejected) | **2/3 finds, both grade PASS 1.0**; reports 10/10 CRITICAL + 10/10 HIGH |
+
+**Zero class-based rejections** — every reproduced logic-oracle finding now
+passes grade on reachability/exploitability merits. One residual quirk: the
+judge mis-deduped the same two-time-pad finding twice (blind cell: bug_00 +
+bug_01; CVE cell likewise) because the manifest excerpt for logic-oracle
+findings is the driver's identical challenge banner — no crash site, no
+class. Follow-up: manifest excerpts for logic-oracle classes should carry
+`crash_type` + the oracle marker line, not the stdout head.
+
+**⚠ Taint caveat (2026-10-03 audit, see docs/port-fidelity-audit.md):** the
+h2 rows above (all lenses) are **git-archaeology-assisted** — the target
+images ship the full upstream `.git` history and all three finding runs read
+the actual upstream fix commit (`3a241be`, "prevent double counting pushed
+streams", #936) before crafting the PoC. The original harness's targets ship
+tarballs/local copies with no history, so this channel is a port-introduced
+regression, not an inherited property. rustls and rustdesk finds showed no
+fix-commit exposure (organic). Treat the h2 rows as confirmation-mode
+results, not blind rediscovery, until re-run with history-free images.
