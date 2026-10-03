@@ -66,6 +66,15 @@ greps predated the git step — but the final approach chain is fix-guided.)
 Fix: clone shallow at the pin and strip history
 (`git clone --depth 1 --branch <tag>`, or `rm -rf .git` after checkout) —
 this restores the original harness's tarball-equivalent baseline.
+Landed 2026-10-03 (`9da755ad`) for h2/rustls/rustdesk.
+
+Operational gotcha found while deploying the fix: `agent_image.ensure()`
+returns early when the agent tag exists, and the agent image embeds
+`COPY --from=<target> /work /work` — so a rebuilt *target* image does NOT
+propagate into agent containers until the agent image
+(`reproof-<target>-latest-agent:*`) is removed. The first re-run attempt
+silently reused yesterday's agent image (with `.git`) despite the rebuilt
+target image. Rule: after changing a target Dockerfile, delete both images.
 
 ### B2. Fresh rust find-runs get the *re-attack* prompt — inherited upstream bug
 
@@ -91,7 +100,11 @@ unaffected (they don't set `reattack_harness`).
 Fix: `find.py` should pass `reattack_harness=None` on fresh runs (or the
 profile should select the harness template on an explicit `patched=True`),
 plus a regression test asserting fresh-run prompts contain no
-"PATCHED"/`/poc/` framing.
+"PATCHED"/`/poc/` framing. **Landed 2026-10-03 (`9da755ad`):** explicit
+`patched` flag in both profiles' `build_find_prompt` (`reattack_harness` now
+only supplies the harness path), `run_find(..., patched=True)` from the
+patch-grade re-attack, fresh cli.py runs default to `patched=False`; three
+regression tests in `tests/test_upstream_focus.py`.
 
 ## Verdict C — by-design steering (acknowledged, to fix in benchmark v2)
 

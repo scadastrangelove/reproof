@@ -112,10 +112,34 @@ class. Follow-up: manifest excerpts for logic-oracle classes should carry
 
 **⚠ Taint caveat (2026-10-03 audit, see docs/port-fidelity-audit.md):** the
 h2 rows above (all lenses) are **git-archaeology-assisted** — the target
-images ship the full upstream `.git` history and all three finding runs read
-the actual upstream fix commit (`3a241be`, "prevent double counting pushed
-streams", #936) before crafting the PoC. The original harness's targets ship
-tarballs/local copies with no history, so this channel is a port-introduced
-regression, not an inherited property. rustls and rustdesk finds showed no
-fix-commit exposure (organic). Treat the h2 rows as confirmation-mode
-results, not blind rediscovery, until re-run with history-free images.
+images shipped the full upstream `.git` history and all three finding runs
+read the actual upstream fix commit (`3a241be`, "prevent double counting
+pushed streams", #936) before crafting the PoC. The original harness's
+targets ship tarballs/local copies with no history, so this channel was a
+port-introduced regression, not an inherited property. rustls and rustdesk
+finds showed no fix-commit exposure (organic).
+
+### h2 clean re-run (2026-10-03, history-free image + B2 template fix)
+
+Fixed in `9da755ad`: images strip `.git` at build; fresh find runs get the
+fresh prompt (the re-attack framing — "patched crate, read /poc/, find the
+path the fix touched" — is gated behind an explicit `patched=True`, and no
+longer leaks into fresh runs; upstream-inherited bug B2). Re-run of all three
+h2 lens cells on the clean image, same protocol, no fuzzing (verified: zero
+fuzz-loop patterns in the transcripts; agents' residual `git log` probes hit
+"not a git repository" and returned nothing):
+
+| Lens | Tainted (2026-10-02) | Clean re-run (2026-10-03) |
+|---|---|---|
+| **blind** | 1/3 ⚠ fix-guided | **1/3** — run_000, counts.rs:111 `assert!(!stream.is_counted)` via 1xx-on-ReservedRemote, grade PASS 1.0, report 10/10 HIGH. Time-to-find 2009 s |
+| **threat-model** | 1/3 ⚠ fix-guided (+2 infra rc=137) | **2/3** — runs 0,1, same site; judge correctly DUP_SKIPed the second; grade PASS 1.0 ×2, report 10/10 HIGH. No infra failures this time |
+| **CVE-seeded** | 1/3 ⚠ fix-guided | **2/3** — runs 0,2, same site; judge DUP_SKIP correct; grade PASS 1.0 ×2, report 10/10 HIGH. Time-to-find 582–1264 s |
+
+Result dirs: blind `20261003T060144Z`, TM `20261003T071338Z`, CVE
+`20261003T082903Z`. Every find is the ground-truth `counts.rs:111` panic,
+reached by source reading + crafted frame sequences — the git-archaeology
+channel is closed (verified live in-container: `/work/h2/.git` absent). The
+clean blind-lens rediscovery of h2 now stands. Also fixed operationally:
+`agent_image.ensure()` caches by tag and does not notice rebuilt target
+images — delete `reproof-<target>-latest-agent:*` after target Dockerfile
+changes (this bit us once on the first re-run attempt).
