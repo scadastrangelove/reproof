@@ -347,6 +347,7 @@ def build_find_prompt(
     found_bugs_path: str | None = None,
     accept_dos: bool = False,
     reattack_harness: str | None = None,
+    patched: bool = False,
 ) -> str:
     focus_section = FOCUS_AREA_SECTION.format(focus_area=focus_area) if focus_area else ""
 
@@ -366,8 +367,14 @@ def build_find_prompt(
 
     # Both templates use {reattack_harness}; supply a sane default for the fresh
     # (non-patched) run so the agent still has the multi-detector oracle.
+    # Template selection is explicit: the post-patch re-attack framing ("the
+    # crate is patched, an original PoC exists in /poc/, find the path the fix
+    # touched") is a *steer* and must never leak into a fresh find run.
+    # `reattack_harness` only supplies the harness path — it must NOT
+    # implicitly select the re-attack template (upstream bug: any target
+    # configuring reattack_harness got the re-attack framing on fresh runs).
     harness = reattack_harness or "/work/run_detectors.sh"
-    template = HARNESS_FIND_TEMPLATE if reattack_harness else FIND_PROMPT_TEMPLATE
+    template = HARNESS_FIND_TEMPLATE if patched else FIND_PROMPT_TEMPLATE
     return template.format(
         github_url=github_url,
         commit=commit,

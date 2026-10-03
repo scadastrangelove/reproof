@@ -330,6 +330,7 @@ def build_find_prompt(
     found_bugs_path: str | None = None,
     accept_dos: bool = False,
     reattack_harness: str | None = None,
+    patched: bool = False,
 ) -> str:
     focus_section = ""
     if focus_area:
@@ -348,13 +349,19 @@ def build_find_prompt(
     if found_bugs_path:
         concurrent_section = CONCURRENT_AGENTS_SECTION.format(found_bugs_path=found_bugs_path)
 
-    if reattack_harness:
+    # Template selection is explicit: the post-patch re-attack framing
+    # ("the crate is patched, an original PoC exists in /poc/, find the path
+    # the fix touched") is a *steer* and must never leak into a fresh find
+    # run. `reattack_harness` only supplies the harness path — it must NOT
+    # implicitly select the re-attack template (upstream bug: any target
+    # configuring reattack_harness got the re-attack framing on fresh runs).
+    if patched:
         return HARNESS_FIND_TEMPLATE.format(
             github_url=github_url,
             commit=commit,
             source_root=source_root,
             binary_path=binary_path,
-            reattack_harness=reattack_harness,
+            reattack_harness=reattack_harness or binary_path,
             focus_area_section=focus_section,
             known_bugs_section=bugs_section,
             concurrent_agents_section=concurrent_section,

@@ -204,6 +204,7 @@ async def grade_patch(
                     focus_area=focus,
                     known_bugs=list(target.known_bugs or []),
                     accept_dos=False,
+                    patched=True,
                     transcript_path=transcript_path,
                     progress_prefix=(
                         f"{progress_prefix}:reattack" if progress_prefix else None

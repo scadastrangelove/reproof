@@ -24,10 +24,23 @@ def test_focus_area_section_renders():
     assert "## Already Filed" not in p
 
 
-def test_reattack_harness_switches_template():
+def test_reattack_harness_alone_does_not_switch_template():
+    # Regression for the contamination found in the port-fidelity audit (B2):
+    # a fresh find run against a target that merely CONFIGURES
+    # reattack_harness (all rust targets do) must still get the fresh template —
+    # the "patched crate / original PoC in /poc/ / path the fix touched"
+    # framing is a steer and belongs to the patch-grade re-attack only.
+    fresh = build_find_prompt("url", "abc", "/src", "/bin", "ctr",
+                              reattack_harness="/tools/check.sh 60")
+    assert "Reproduction harness" not in fresh
+    assert "/poc/" not in fresh
+    assert "PATCHED" not in fresh
+
+
+def test_patched_switches_template():
     default = build_find_prompt("url", "abc", "/src", "/bin", "ctr")
     harn = build_find_prompt("url", "abc", "/src", "/bin", "ctr",
-                             reattack_harness="/tools/check.sh 60")
+                             reattack_harness="/tools/check.sh 60", patched=True)
     assert "Reproduction harness: `/tools/check.sh 60`" in harn
     assert "/poc/" in harn
     assert "/tools/check.sh" not in default
@@ -36,9 +49,14 @@ def test_reattack_harness_switches_template():
         assert tag in harn and tag in default
 
 
+def test_patched_without_harness_falls_back_to_binary():
+    p = build_find_prompt("url", "abc", "/src", "/bin", "ctr", patched=True)
+    assert "Reproduction harness: `/bin`" in p
+
+
 def test_reattack_harness_with_known_bugs():
     p = build_find_prompt("url", "abc", "/src", "/bin", "ctr",
-                          reattack_harness="/tools/check.sh",
+                          reattack_harness="/tools/check.sh", patched=True,
                           known_bugs=["UAF in bar()"])
     assert "## Already Filed" in p
     assert "- UAF in bar()" in p
@@ -84,6 +102,26 @@ def test_accept_dos_section_renders_when_enabled():
     dos_pos = p.index("## Benchmark mode")
     output_pos = p.index("## Output Format")
     assert tiers_pos < dos_pos < output_pos
+
+
+# ── rust profile: same template-selection contract ───────────────────────────
+
+def test_rust_fresh_run_never_gets_reattack_framing():
+    # Regression for port-fidelity audit B2: every rust benchmark run used to
+    # get HARNESS_FIND_TEMPLATE ("PATCHED crate", "original PoC in /poc/")
+    # because the target config sets reattack_harness.
+    from reproof.profiles import get_profile
+    build = get_profile("rust").build_find_prompt
+    fresh = build("url", "abc", "/src", "/bin",
+                  reattack_harness="/work/run_detectors.sh")
+    assert "PATCHED" not in fresh
+    assert "/poc/" not in fresh
+    # the harness path is still shown as the multi-detector oracle
+    assert "/work/run_detectors.sh" in fresh
+    patched = build("url", "abc", "/src", "/bin",
+                    reattack_harness="/work/run_detectors.sh", patched=True)
+    assert "PATCHED" in patched
+    assert "/poc/" in patched
 
 
 # ── _assigned_focus round-robin ──────────────────────────────────────────────

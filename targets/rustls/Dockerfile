@@ -15,9 +15,12 @@ RUN rustup toolchain install nightly --profile minimal \
     && rustup default nightly \
     && cargo install cargo-fuzz --locked
 
-# The crate under audit, pinned at the vulnerable commit.
+# The crate under audit, pinned at the vulnerable commit. History is stripped
+# (`rm -rf .git`) — see port-fidelity audit B1: full upstream history lets the
+# agent enumerate post-pin fix commits.
 RUN git clone https://github.com/rustls/rustls /work/rustls \
-    && cd /work/rustls && git checkout -q bd9f7f59aa79
+    && cd /work/rustls && git checkout -q bd9f7f59aa79 \
+    && rm -rf /work/rustls/.git
 
 COPY driver /work/driver
 COPY run_detectors.sh /work/run_detectors.sh

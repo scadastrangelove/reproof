@@ -32,6 +32,7 @@ async def run_find(
     accept_dos: bool = False,
     system_prompt: str | None = None,
     max_resume_attempts: int = 20,
+    patched: bool = False,
 ) -> tuple[CrashArtifact | None, AgentResult, dict[str, float]]:
     """Run one find attempt against a target.
 
@@ -57,6 +58,7 @@ async def run_find(
             found_bugs_path="/tmp/found_bugs.jsonl" if found_bugs_path else None,
             accept_dos=accept_dos,
             reattack_harness=target.reattack_harness,
+            patched=patched,
         )
         t0 = time.time()
         result = await run_agent(

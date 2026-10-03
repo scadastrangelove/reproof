@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates pkg-config libsodium-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/rustdesk/hbb_common /work/hbb_common \
-    && cd /work/hbb_common && git checkout -q 69cea8da
+    && cd /work/hbb_common && git checkout -q 69cea8da \
+    && rm -rf /work/hbb_common/.git
 COPY gen /gen
 RUN cd /gen && cargo run --release -q > /challenge.json
 
@@ -30,8 +31,11 @@ RUN rustup toolchain install nightly --profile minimal \
     && cargo install cargo-fuzz --locked
 
 # The crate under audit, pinned at the vulnerable commit (agent reads it here).
+# History stripped (`rm -rf .git`) — port-fidelity audit B1: full upstream
+# history lets the agent enumerate post-pin fix commits.
 RUN git clone https://github.com/rustdesk/hbb_common /work/hbb_common \
-    && cd /work/hbb_common && git checkout -q 69cea8da
+    && cd /work/hbb_common && git checkout -q 69cea8da \
+    && rm -rf /work/hbb_common/.git
 
 COPY --from=gen /challenge.json /work/challenge.json
 COPY driver /work/driver
