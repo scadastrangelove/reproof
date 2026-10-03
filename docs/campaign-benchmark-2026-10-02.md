@@ -41,6 +41,7 @@ Results dirs (Tamm `~/reproof/results/<target>/`):
    target prints PWNED". The judge still reports (blind: 10/10 CRITICAL with an
    honest "not a memory-safety crash" primitive section). If we keep
    crypto-oracle targets, the grade prompt needs a logic-oracle clause.
+   **→ Fixed 2026-10-03, see "Prompt fix" below.**
 3. **h2 TM `agent_failed` (rc=137)** on 2/3 runs — infra kill (SIGKILL), not a
    fair no-crash. Recall is understated there.
 4. **Aggregate (union-of-N) held everywhere**: each cell's crashes deduped to
@@ -50,3 +51,48 @@ Results dirs (Tamm `~/reproof/results/<target>/`):
    but no blind run was trivial — h2 required assembling valid HPACK-bearing
    frames, rustls a structurally valid ClientHello flight, rustdesk reading
    `Encrypt::enc` and deriving the XOR relation.
+
+## Prompt fix (2026-10-03)
+
+Observation 2 root-caused to the grade prompt rejecting findings by bug
+*class* instead of grading reachability/exploitability conditions. The
+rejected rustdesk runs all showed the same pattern in the grader's own
+evidence: "All 3 runs print PWNED … exit 101 … no panic, no sanitizer output,
+**not a crash**" — the effect verified, the class rejected. Fix landed in two
+commits (`0ce1c7c`, `462a4cd`, `88d68f4e`), covering BOTH prompt layers (the
+cpp base in `reproof/prompts/` and the rust profile overrides in
+`reproof/rust/` — the first fix round only touched the base and validation
+caught the profile still rejecting):
+
+- **Grade prompts** are now class-agnostic: a finding is a reproducing crash
+  OR a declared logic oracle (exit-code/marker signal for crypto-relation
+  breaks, injection, SSRF, authz bypass, data loss). Criterion 2 gained a
+  wrong-input control for logic classes (signal must fire for the PoC and NOT
+  for a mutated input); criterion 4 verifies the defect lives in the project
+  code, not the harness. Rejecting a genuine reproducing finding because of
+  its class is now explicitly called out as a grader error.
+- **Find prompts** gained a methodology section: reasoning-first,
+  hypothesis-driven PoCs; mass mutation/fuzz loops are explicitly the separate
+  find→fuzz reattack stage's job, not the find-agent's. `crash_type` accepts
+  `logic-oracle:<class>`. An honest no-finding beats an hours-long fuzz
+  campaign.
+
+Validation run (`results/rustdesk/20261002T151645Z`, 2 runs, fixed prompts):
+both finds submitted `logic-oracle:crypto-key-recovery`; both grades
+**passed 1.0, all 5 criteria** (previously rejected); judge NEW; report
+**10/10 HIGH** with the grader evidence reading "64-byte PoC = exact m_b. All
+3 runs: PWNED + exit 101; mutated control rejected."
+
+### Re-run of the grade-affected cells (2026-10-03, in progress)
+
+The fix only affects rustdesk — h2 and rustls had zero grade rejections
+(their misses were find-side `no_crash_found` / infra `agent_failed`). All
+three rustdesk lens cells are being re-run with the fixed prompts, same
+protocol (`--runs 3 --parallel --stream`; TM = `--auto-focus`; CVE = temp
+single-area `focus_areas`, reverted after). Results to be appended here.
+
+| Lens | Pre-fix | Post-fix re-run |
+|---|---|---|
+| **blind** | 2/3 votes (run 1 grade-rejected) | *(running)* |
+| **threat-model** | 2/3 votes (runs 0,1 grade-rejected) | *(running)* |
+| **CVE-seeded** | 2/3 votes (runs 1,2 grade-rejected) | *(running)* |
