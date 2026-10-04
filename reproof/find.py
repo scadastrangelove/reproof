@@ -48,7 +48,8 @@ async def run_find(
         target.image_tag, container_name, agent_env,
         memory=target.memory_limit, shm_size=target.shm_size, mounts=mounts,
     ) as container:
-        prompt = get_profile(target.profile).build_find_prompt(
+        profile = get_profile(target.profile)
+        prompt = profile.build_find_prompt(
             github_url=target.github_url,
             commit=target.commit,
             source_root=target.source_root,
@@ -59,6 +60,7 @@ async def run_find(
             accept_dos=accept_dos,
             reattack_harness=target.reattack_harness,
             patched=patched,
+            **(profile.find_context(target) if profile.find_context else {}),
         )
         t0 = time.time()
         result = await run_agent(

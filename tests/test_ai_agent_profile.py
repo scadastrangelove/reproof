@@ -101,6 +101,29 @@ def test_builder_signatures_match_cpp_reference():
         assert not missing, f"ai-agent {stage}_prompt missing kwargs: {sorted(missing)}"
 
 
+def test_find_prompt_carries_contract_catalog():
+    """The finder must write a scenario the replay can validate: contract_id,
+    mode, catalog entry ids and oracle ids come from the operator's contract via
+    the profile's find_context hook, plus the strict-format rules."""
+    pr = P.get_profile("ai-agent")
+    tc = TargetConfig.load(str(_REPO / "targets" / "ai-agent-canary"))
+    extra = pr.find_context(tc)
+    contract = extra["contract"]
+    p = pr.build_find_prompt(github_url="u", commit="c", source_root="s", binary_path="b",
+                             **extra)
+    assert contract["id"] in p
+    assert f"mode: {contract['runtime']['mode']}" in p
+    for eid in contract["entries"]:
+        assert eid in p
+    for oid in contract["oracles"]:
+        assert oid in p
+    for marker in ('"schema_version": 1', "additionalProperties:false",
+                   "role=attacker", "SCENARIO FORMAT"):
+        assert marker in p
+    # other profiles have no hook and are untouched
+    assert P.get_profile("rust").find_context is None
+
+
 def test_find_prompt_patched_framing():
     pr = P.get_profile("ai-agent")
     p = pr.build_find_prompt(github_url="u", commit="c", source_root="s", binary_path="b",

@@ -80,6 +80,10 @@ class Profile:
     build_report_prompt: Callable[..., str]
     build_patch_prompt: Callable[..., str]
     build_style_judge_prompt: Callable[..., str]
+    # Optional hook: extra kwargs for build_find_prompt derived from the target
+    # config (e.g. ai-agent injects the operator's target-contract catalog so the
+    # finder writes schema-valid, replayable scenarios instead of inventing a form).
+    find_context: Callable[..., dict] | None = None
     # find→fuzz reattack binder (P0.2). None → this profile has no dispatch-based
     # reattack stage and uses the static `config.reattack_harness` script instead
     # (cpp's model). rust wires find_to_fuzz.build_reattack.
@@ -124,6 +128,17 @@ _ANDROID = Profile(
     build_reattack=_an_reattack.build_reattack,           # static→dynamic Tier-A/B promotion
 )
 
+def _ai_find_context(target) -> dict:
+    """Inject the operator-reviewed target contract into the ai-agent find prompt
+    so the finder writes a scenario the replay can actually validate (W59 seam:
+    without it the finder invents its own JSON shape and grade gates UNVERIFIED)."""
+    path = getattr(target, "ai_agent_contract_path", None)
+    if not path:
+        return {}
+    from .ai_agent.contracts import load
+    return {"contract": load(path, "target-contract")}
+
+
 _AI_AGENT = Profile(
     name="ai-agent",
     detector=_ai_detect,                                  # AIAGENT-header parsing (no stack trace)
@@ -134,6 +149,7 @@ _AI_AGENT = Profile(
     build_report_prompt=_ai_report.build_report_prompt,   # invariant/attacker/entry/evidence-scope
     build_patch_prompt=_ai_patch.build_patch_prompt,      # restore the guard; behavioral oracle
     build_style_judge_prompt=_ai_patch.build_style_judge_prompt,  # advisory (base re-export)
+    find_context=_ai_find_context,                    # contract catalog -> scenario spec
     # build_reattack intentionally None: the cli invokes rust's reattack only;
     # ai-agent dynamic confirmation is the operator replay, wired separately.
 )
