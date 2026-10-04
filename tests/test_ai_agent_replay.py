@@ -143,3 +143,30 @@ def test_output_budget_enforced_during_execution():
 def test_time_budget_enforced():
     with pytest.raises(runtime.ReplayError, match='time budget'):
         runtime.bounded_command([sys.executable,'-c','import time; time.sleep(10)'],timeout=0.1)
+
+
+def test_internal_lan_network_mode(monkeypatch):
+    """internal-lan gives the victim an RFC-1918 eth0 (docker --internal net, no egress)."""
+    contract = contracts.load(ROOT / "targets/ai-agent-canary/target-contract.json", "target-contract")
+    lan_contract = copy.deepcopy(contract)
+    lan_contract["runtime"]["network"] = "internal-lan"
+    calls = []
+
+    def fake_command(argv, **kwargs):
+        calls.append(argv)
+        return runtime.CommandResult(0, b"", b"", 1.0)
+
+    monkeypatch.setattr(runtime, "bounded_command", fake_command)
+    with runtime.victim_lab("image", lan_contract):
+        pass
+    run_argv = next(a for a in calls if a[:2] == ["docker", "run"])
+    assert "vp-ai-lan" in run_argv and "none" not in run_argv
+
+
+def test_unknown_network_mode_still_refused(monkeypatch):
+    contract = contracts.load(ROOT / "targets/ai-agent-canary/target-contract.json", "target-contract")
+    bad = copy.deepcopy(contract)
+    bad["runtime"]["network"] = "bridge"
+    with pytest.raises(runtime.UnsupportedReplay):
+        with runtime.victim_lab("image", bad):
+            pass

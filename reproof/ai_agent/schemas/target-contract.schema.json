@@ -115,8 +115,10 @@
         "network": {
           "enum": [
             "none",
+            "internal-lan",
             "model-proxy"
-          ]
+          ],
+          "description": "internal-lan = docker --internal network (RFC-1918 eth0, no egress)"
         },
         "reset": {
           "const": "fresh-container"

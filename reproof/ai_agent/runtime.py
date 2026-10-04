@@ -133,10 +133,20 @@ class DockerLab:
 @contextlib.contextmanager
 def victim_lab(image_id: str, contract: dict) -> Iterator[DockerLab]:
     cfg = contract["runtime"]
-    if cfg["network"] != "none" or cfg["mode"] != "mechanism":
+    network = cfg["network"]
+    if network not in ("none", "internal-lan") or cfg["mode"] != "mechanism":
         raise UnsupportedReplay("model-proxy/agent-behavior adapter is not installed")
+    if network == "internal-lan":
+        # RFC-1918 peer surface for LAN-scope findings: a docker --internal network
+        # gives the victim an eth0 private address with zero external egress.
+        probe = bounded_command(["docker", "network", "inspect", "vp-ai-lan"])
+        if probe.returncode:
+            created = bounded_command(["docker", "network", "create", "--internal", "vp-ai-lan"])
+            if created.returncode:
+                raise ReplayError("internal-lan network create failed: " + created.stderr.decode(errors="replace"))
     name = "vp-ai-victim-" + uuid.uuid4().hex
-    argv = ["docker", "run", "--detach", "--name", name, "--network", "none",
+    argv = ["docker", "run", "--detach", "--name", name,
+            "--network", "none" if network == "none" else "vp-ai-lan",
             "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--pids-limit", str(cfg["pids_limit"]), "--memory", f"{cfg['memory_mb']}m",
             "--user", cfg["user"], "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=32m",
