@@ -32,6 +32,11 @@ def test_builders_emit_required_tags():
     for tag in ("<poc_path>", "<reproduction_command>", "<crash_type>", "<crash_output>",
                 "<exit_code>", "<dup_check>", "AIAGENT:"):
         assert tag in find
+    # the parser contract is strict <tag>...</tag>; the prompt must model the
+    # closing tags, or agents mimic a `<tag>:` bullet and the submission is dropped
+    for tag in ("</poc_path>", "</reproduction_command>", "</crash_type>",
+                "</crash_output>", "</exit_code>", "</dup_check>"):
+        assert tag in find
     grade = pr.build_grade_prompt(image_tag="i", reproduction_command="r",
                                   reproduction_command_adapted="r", crash_type="aiagent:x",
                                   exit_code=0, source_root="s", workspace_poc="w")

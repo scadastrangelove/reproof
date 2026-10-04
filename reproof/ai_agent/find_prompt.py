@@ -127,23 +127,37 @@ stage only argues *static reachability* — do NOT claim an observed effect, a
 reliability number, or dynamic confirmation. Those require the operator's
 independent replay downstream.
 
-Submit ONE candidate at a time, as these tags:
-- <poc_path>: path to a scenario JSON you write under the workspace, in EXACTLY
-  the SCENARIO FORMAT above, bound to the contract catalog (this is the candidate
-  artifact, not an executed exploit).
-- <crash_output>: an AIAGENT header block, exactly:
-    AIAGENT: invariant=<stable-id> component=<name> scope=static_path
-    attacker: <principal>
-    entry: <entry point>
-    guard: <guard that should have held>
-    effect: <unauthorized effect on the asset>
-- <crash_type>: the invariant id (e.g. `aiagent:authorization-bypass`,
-  `aiagent:tool-arg-injection`, `aiagent:context-to-authority`,
-  `aiagent:delayed-exec`, `aiagent:output-exfil`). Stable, kebab, `aiagent:` prefix.
-- <reproduction_command>: the operator-side replay entry that would verify this,
-  referencing <poc_path> (e.g. `python -m reproof.ai_agent.runtime <poc_path>`).
-  It is a specification for the dynamic stage, not something you run here.
-- <exit_code>: 0 (placeholder; behavioral findings have no process exit).
-- <dup_check>: your reachability trace (entry -> guards -> effect), the
-  contrary evidence you considered, and why this is distinct from prior findings
-  (dedup is by invariant + component + root cause, not by file/line)."""
+Submit ONE candidate at a time. Tags are parsed STRICTLY as
+`<tag>...</tag>` pairs (with the closing tag) — a `<tag>:` bullet is prose and
+is NOT parsed; an unparsed submission is silently dropped. Emit exactly:
+
+<poc_path>/work/scenario-<kebab-id>.json</poc_path>
+(path to a scenario JSON you write FIRST, in EXACTLY the SCENARIO FORMAT above,
+bound to the contract catalog — the candidate artifact, not an executed exploit)
+
+<crash_output>
+AIAGENT: invariant=<stable-id> component=<name> scope=static_path
+attacker: <principal>
+entry: <entry point>
+guard: <guard that should have held>
+effect: <unauthorized effect on the asset>
+</crash_output>
+
+<crash_type>aiagent:authorization-bypass</crash_type>
+(the invariant id — stable, kebab, `aiagent:` prefix; e.g. `aiagent:authorization-bypass`,
+`aiagent:tool-arg-injection`, `aiagent:context-to-authority`,
+`aiagent:delayed-exec`, `aiagent:output-exfil`)
+
+<reproduction_command>python -m reproof.ai_agent.runtime /work/scenario-<kebab-id>.json</reproduction_command>
+(the operator-side replay entry that would verify this, referencing <poc_path>;
+a specification for the dynamic stage, not something you run here)
+
+<exit_code>0</exit_code>
+(placeholder; behavioral findings have no process exit)
+
+<dup_check>
+your reachability trace (entry -> guards -> effect), the contrary evidence you
+considered, and why this is distinct from prior findings (dedup is by
+invariant + component + root cause, not by file/line)
+</dup_check>
+"""
