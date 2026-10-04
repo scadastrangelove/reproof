@@ -131,3 +131,25 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 - **Change:** provenance gate in grade/replay: given candidate (path/symbol) + running artifact, assert
   byte-identity of the implicated file (or flag drift) BEFORE measuring; evidence carries
   `provenance:{analyzed_commit, tested_artifact, identical|drift}`. W54.
+
+## L71 — A wired path is proven only by a live run; each first run exposes exactly one seam `[PROVEN]` · process
+
+- **Evidence:** the first ai-agent canary e2e (three-lens, Kimi) needed five attempts, and each failed
+  at a different seam that unit tests with mocked replay could not see: (1) `build_find_prompt` rejected
+  the `patched` kwarg the generic find stage passes every profile; (2) the finder wrote a scenario in an
+  invented JSON shape because the prompt never pinned the schema, and grade discarded it as UNVERIFIED;
+  (3) all three finders emitted `<tag>:` prose bullets which the strict `<tag>...</tag>` parser silently
+  dropped — zero artifacts from three correct findings; (4) the assessor requires
+  `finding.invariant == oracle.invariant` verbatim, but the catalog showed oracle descriptions, not
+  invariant ids — every candidate assessed UNRESOLVED; (5) replay trials died with
+  `infrastructure_error`: gVisor sentry threads count against the victim's cgroup pids limit, so the
+  contract's `pids_limit: 32` intermittently killed runsc itself (urpc EOF), only under the sandboxed
+  pipeline, never in unsandboxed manual replays.
+- **Why:** every seam sat at a boundary between a generic stage and profile-specific data (kwargs,
+  schema, tag syntax, identifier identity, runtime resources). Mocks per side agree with themselves;
+  only the live wire-up exercises the actual contract both sides must meet.
+- **Change:** profile builders' signatures are pinned to the cpp reference offline; the find prompt
+  carries the distilled contract catalog (entries/oracles/mode/invariant ids) plus the strict scenario
+  format and tag syntax; victim labs floor pids-limit at 256 under a sandbox runtime. All five fixes
+  ship with regression tests. W59 shipped; follow-ups W61 (judge dedup on root cause, not component
+  string) and W62 (report prompt: replay is orchestrator-side).

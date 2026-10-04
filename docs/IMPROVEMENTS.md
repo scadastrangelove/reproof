@@ -64,10 +64,25 @@ tested.
   edit. Make `-v lab:/work/lab` (and the adapter pack) the default in target runbooks; images rebuild only
   on dependency changes. **Done-when:** target READMEs/run scripts mount by default and the adapters
   README says so.
-- **W59 — one full wired e2e run on an ai-agent canary** `[pipeline]`. This wave's confirmations ran
+- **W59 [SHIPPED 2026-10-05] — one full wired e2e run on an ai-agent canary** `[pipeline]`. This wave's confirmations ran
   largely through scripts around the harness; only single legs (grade → replay) are proven end-to-end.
   Run one ai-agent canary target through the complete find → grade → aggregate → scorecard path.
-  **Done-when:** a scorecard artifact exists from a from-scratch pipeline run, with no out-of-band steps.
+  **Done 2026-10-05:** three-lens run (blind / threat-model / history) on `ai-agent-canary` with
+  `kimi-for-coding` went find → tag-parse → schema-validation → replay-grade → judge → report → aggregate
+  with zero out-of-band steps: 3/3 runs `crash_found`, all grades replay-confirmed (score 1.0), both
+  planted invariants confirmed (`vault-authorization` ×2 lenses, `export-authorization` ×1), 3 reports
+  (rubric 6–8/10, sev HIGH). Bring-up took five runs; each exposed exactly one seam, all fixed and
+  pinned by tests (L71). Run log: `results/ai-agent-canary/20261004T223505Z/` on the runner host.
+- **W61 — judge dedup across lens runs is too lenient on component naming** `[judge]`. Two runs found
+  the SAME vault-read authz bypass (same invariant, same root cause, same lines) but named the component
+  differently ("assistant-service.dispatch" vs "request-dispatch"); the judge marked both NEW and two
+  reports were written. Tighten the judge prompt: dedup key is invariant + ROOT CAUSE, component strings
+  are agent-invented and vary. **Done-when:** the canary three-lens run yields 2 bugs, not 3.
+- **W62 — report agents try to run the replay inside the container** `[prompts]`. Report agents on the
+  canary burned turns attempting `python -m reproof.ai_agent.runtime /tmp/poc.bin` inside the target
+  container, where the harness does not exist. State in the ai-agent report prompt that replay is
+  orchestrator-side and the container has no reproof install. **Done-when:** report transcripts show no
+  replay attempts.
 - **W60 — status lines generated from artifacts, not hand-maintained** `[docs]`. Profile/repo status
   strings drifted against reality twice this wave (verifier-only vs grade-leg-proven). Generate the status
   line from artifact presence (e.g. a pipeline-confirmed evidence file flips the claim). **Done-when:**
