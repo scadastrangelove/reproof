@@ -5,3 +5,13 @@ __pycache__/
 .tooling/
 results/
 .DS_Store
+
+# Real-world ai-agent targets: pinned source checkouts, lab fixtures (victim
+# repos, payload recipes) and finding-linked material — never commit.
+# Synthetic targets that ship with the repo (targets/ai-agent-canary/) and the
+# ported rust targets stay tracked.
+targets/*-src/
+targets/goose/
+targets/omniroute/
+targets/open-webui/
+targets/ai-agent-research-targets.md
