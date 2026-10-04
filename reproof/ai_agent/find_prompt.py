@@ -17,7 +17,7 @@ from ..prompts.untrusted import make_nonce, sanitize_untrusted, untrusted_block
 def build_find_prompt(github_url: str, commit: str, source_root: str, binary_path: str,
                       focus_area: str | None = None, known_bugs: list[str] | None = None,
                       found_bugs_path: str | None = None, accept_dos: bool = False,
-                      reattack_harness: str | None = None) -> str:
+                      reattack_harness: str | None = None, patched: bool = False) -> str:
     focus = focus_area or "the deployed authority: entries, trust boundaries, tools, state, lifecycle"
     known = ""
     if known_bugs:
@@ -26,7 +26,18 @@ def build_find_prompt(github_url: str, commit: str, source_root: str, binary_pat
                  + untrusted_block(sanitize_untrusted("\n".join(known_bugs)), nonce) + "\n")
     dos = ("DoS/resource-exhaustion findings are in scope.\n" if accept_dos
            else "Prefer authorization/logic/native findings over plain DoS unless asked.\n")
+    patch_note = ""
+    if patched:
+        patch_note = """
+NOTE — re-attack on a PATCHED target: a fix for a prior finding was just applied,
+and the original scenario JSON is under `/poc/` (read it to learn the targeted
+invariant and code path; it should no longer hold post-patch). Your task is to
+find a DIFFERENT path that violates a security invariant — a sibling entry, an
+adjacent guard, or a distinct root cause the patch did not cover. Resubmitting
+the patched path with cosmetic changes is a duplicate, not a find.
+"""
     return f"""You are conducting authorized static security review of an AI/agent system.
+{patch_note}
 
 TARGET: {source_root}  (repo {github_url} @ {commit}; artifact {binary_path})
 FOCUS: {focus}

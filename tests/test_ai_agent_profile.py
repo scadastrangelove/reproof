@@ -78,6 +78,39 @@ def test_detector_surface():
     assert "AIAGENT:" in d.asan_excerpt(_HEADER)
 
 
+def test_builder_signatures_match_cpp_reference():
+    """The generic pipeline (find.py/grade.py/judge.py/report.py/patch.py) calls
+    each profile builder with one fixed kwarg set for every profile. The ai-agent
+    builders must accept everything the cpp reference accepts — drift here is only
+    visible at e2e time (TypeError mid-run), so pin it offline."""
+    import inspect
+    from reproof.prompts import (find_prompt as cpp_find, grade_prompt as cpp_grade,
+                                 judge_prompt as cpp_judge, report_prompt as cpp_report,
+                                 patch_prompt as cpp_patch)
+
+    pr = P.get_profile("ai-agent")
+    pairs = [("find", cpp_find.build_find_prompt, pr.build_find_prompt),
+             ("grade", cpp_grade.build_grade_prompt, pr.build_grade_prompt),
+             ("judge", cpp_judge.build_judge_prompt, pr.build_judge_prompt),
+             ("report", cpp_report.build_report_prompt, pr.build_report_prompt),
+             ("patch", cpp_patch.build_patch_prompt, pr.build_patch_prompt)]
+    for stage, ref, ai in pairs:
+        ref_params = set(inspect.signature(ref).parameters)
+        ai_sig = inspect.signature(ai)
+        missing = ref_params - set(ai_sig.parameters)
+        assert not missing, f"ai-agent {stage}_prompt missing kwargs: {sorted(missing)}"
+
+
+def test_find_prompt_patched_framing():
+    pr = P.get_profile("ai-agent")
+    p = pr.build_find_prompt(github_url="u", commit="c", source_root="s", binary_path="b",
+                             patched=True)
+    assert "PATCHED" in p and "/poc/" in p
+    # non-patched default run must not mention the patch
+    assert "PATCHED" not in pr.build_find_prompt(github_url="u", commit="c",
+                                                 source_root="s", binary_path="b")
+
+
 def test_detector_tolerates_empty():
     d = P._ai_detect
     assert d.project_frames("") == []
