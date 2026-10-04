@@ -164,6 +164,33 @@ def test_internal_lan_network_mode(monkeypatch):
     assert "vp-ai-lan" in run_argv and "none" not in run_argv
 
 
+def test_pids_limit_floored_under_sandbox_runtime(monkeypatch):
+    """gVisor's sentry threads count against the victim cgroup's pids limit; a
+    contract-sized limit (32) starves runsc itself (urpc EOF, dead sandbox).
+    With REPROOF_AGENT_RUNTIME set the lab must floor the limit."""
+    contract = contracts.load(ROOT / "targets/ai-agent-canary/target-contract.json", "target-contract")
+    assert contract["runtime"]["pids_limit"] < 256  # the canary pins the tight value
+    calls = []
+
+    def fake_command(argv, **kwargs):
+        calls.append(argv)
+        return runtime.CommandResult(0, b"", b"", 1.0)
+
+    monkeypatch.setattr(runtime, "bounded_command", fake_command)
+    monkeypatch.setenv("REPROOF_AGENT_RUNTIME", "runsc")
+    with runtime.victim_lab("image", contract):
+        pass
+    run_argv = next(a for a in calls if a[:2] == ["docker", "run"])
+    assert run_argv[run_argv.index("--pids-limit") + 1] == "256"
+
+    calls.clear()
+    monkeypatch.delenv("REPROOF_AGENT_RUNTIME")
+    with runtime.victim_lab("image", contract):
+        pass
+    run_argv = next(a for a in calls if a[:2] == ["docker", "run"])
+    assert run_argv[run_argv.index("--pids-limit") + 1] == str(contract["runtime"]["pids_limit"])
+
+
 def test_controls_scoped_to_other_scenarios_do_not_run(setup):
     contract, scenario, labs, _ = setup
     for control in contract['controls']:

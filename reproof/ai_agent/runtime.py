@@ -146,10 +146,19 @@ def victim_lab(image_id: str, contract: dict) -> Iterator[DockerLab]:
             if created.returncode:
                 raise ReplayError("internal-lan network create failed: " + created.stderr.decode(errors="replace"))
     name = "vp-ai-victim-" + uuid.uuid4().hex
+    # gVisor's sentry threads count against the container cgroup's pids limit,
+    # so a contract-sized limit meant for the target workload (e.g. 32) starves
+    # runsc itself — launches/execs fail intermittently with urpc EOF and the
+    # sandbox dies. Floor the limit when the victim runs under a sandbox runtime;
+    # the contract value still bounds the target's own fork bombs via runsc's
+    # internal accounting, this only gives the sentry headroom.
+    pids_limit = cfg["pids_limit"]
+    if sandbox.runtime():
+        pids_limit = max(pids_limit, 256)
     argv = ["docker", "run", "--detach", "--name", name,
             "--network", "none" if network == "none" else "vp-ai-lan",
             "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--pids-limit", str(cfg["pids_limit"]), "--memory", f"{cfg['memory_mb']}m",
+            "--pids-limit", str(pids_limit), "--memory", f"{cfg['memory_mb']}m",
             "--user", cfg["user"], "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=32m",
             "--tmpfs", "/work/state:rw,nosuid,nodev,noexec,size=32m,mode=1777"]
     if sandbox.runtime():
