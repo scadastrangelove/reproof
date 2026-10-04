@@ -19,6 +19,8 @@ for the fix, agent-authored source) — the prompt template already wraps them.
 """
 from __future__ import annotations
 
+import re
+
 from . import sandbox
 from .agent_kimi import AgentResult, parse_xml_tag, run_agent
 from .artifacts import MaintainerReviewVerdict
@@ -26,9 +28,13 @@ from .prompts.maintainer_review_prompt import build_maintainer_review_prompt
 
 MAINTAINER_REVIEW_MAX_TURNS = 60
 
-_VERDICT_TOKENS = ("ACCEPT", "DOWNGRADE", "REJECT", "WONTFIX")
+_VERDICT_TOKENS = ("ACCEPT", "DOWNGRADE", "REJECT", "WONTFIX", "UNVERIFIED_REFUTE")
 _SEVERITY_TOKENS = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
 _REACH_TOKENS = ("REACHABLE", "CONSTRUCTION_ONLY", "UNCLEAR")
+
+# L67/W53: a source-adjudicated dismissal must quote the code that stops the
+# finding (path:line). A REJECT/WONTFIX without one is an unverified refute.
+_SOURCE_CITATION = re.compile(r"[\w./-]+\.[A-Za-z]{1,6}:\d+")
 
 
 async def run_maintainer_review(
@@ -84,7 +90,7 @@ def _parse_maintainer_review(text: str) -> MaintainerReviewVerdict | None:
     verdict = _parse_token(block, "verdict", _VERDICT_TOKENS, default=None)
     if verdict is None:
         return None
-    return MaintainerReviewVerdict(
+    review = MaintainerReviewVerdict(
         verdict=verdict,
         corrected_severity=_parse_token(block, "corrected_severity", _SEVERITY_TOKENS,
                                         default="LOW"),
@@ -95,6 +101,9 @@ def _parse_maintainer_review(text: str) -> MaintainerReviewVerdict | None:
         rebuttals=(parse_xml_tag(block, "rebuttals") or "").strip(),
         one_line=(parse_xml_tag(block, "one_line") or "").strip(),
     )
+    if review.verdict in ("REJECT", "WONTFIX") and not _SOURCE_CITATION.search(review.rebuttals):
+        review.verdict = "UNVERIFIED_REFUTE"
+    return review
 
 
 def _parse_token(text: str, tag: str, tokens: tuple[str, ...], default: str | None) -> str | None:

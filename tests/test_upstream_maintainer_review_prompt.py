@@ -40,6 +40,12 @@ def test_prompt_demands_code_citations_and_reachability_axis():
     assert "downgrade" in p.lower()
 
 
+def test_prompt_offers_unverified_refute_for_sourceless_dismissals():
+    p = _p()
+    assert "UNVERIFIED_REFUTE" in p          # L67/W53: refute needs a quoted source line
+    assert "does not count as a dismissal" in p
+
+
 def test_empty_fields_default_gracefully():
     p = build_maintainer_review_prompt(
         finding_text="", severity_claimed="", fix_snippet="",

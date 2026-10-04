@@ -1,6 +1,7 @@
 """Observer orchestration tests. These do not substitute for Docker replay."""
 import contextlib
 import copy
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -161,6 +162,218 @@ def test_internal_lan_network_mode(monkeypatch):
         pass
     run_argv = next(a for a in calls if a[:2] == ["docker", "run"])
     assert "vp-ai-lan" in run_argv and "none" not in run_argv
+
+
+def test_controls_scoped_to_other_scenarios_do_not_run(setup):
+    contract, scenario, labs, _ = setup
+    for control in contract['controls']:
+        if control['id'] in ('owner-export', 'empty-queue'):
+            control['scenarios'] = ['some-other-scenario']
+    result = runtime.replay(scenario, contract, 'image')
+    outcome = evidence.assess(result, scenario, contract)
+    assert outcome.confirmed and (outcome.successes, outcome.completed, outcome.scheduled) == (3, 3, 3)
+    assert len(labs) == 9  # two scoped controls plus a fresh attack per trial
+    assert {c['id'] for c in result['controls']} == {'owner-vault-read', 'public-info'}
+
+
+def test_scoped_controls_must_keep_both_kinds(setup):
+    contract, scenario, labs, _ = setup
+    for control in contract['controls']:
+        if control['kind'] == 'negative':
+            control['scenarios'] = ['some-other-scenario']
+    with pytest.raises(contracts.ContractError, match='scoped controls'):
+        runtime.replay(scenario, contract, 'image')
+    assert not labs  # fail fast: no containers were spawned
+
+
+def test_check_controls_preflight_reports_broken_oracle(setup, monkeypatch):
+    contract, scenario, labs, Lab = setup
+    rows = runtime.check_controls(scenario, contract, 'image')
+    assert all(r['status'] == 'passed' for r in rows) and len(rows) == 4
+
+    original = Lab.execute
+    def pointer_broken(self, entry, request):
+        if request.get('operation') == 'public.info':
+            raise runtime.ReplayError('observed response is missing the configured JSON field')
+        return original(self, entry, request)
+    monkeypatch.setattr(Lab, 'execute', pointer_broken)
+    rows = runtime.check_controls(scenario, contract, 'image')
+    by_id = {r['id']: r for r in rows}
+    assert by_id['public-info']['status'] == 'error'
+    assert 'missing the configured JSON field' in by_id['public-info']['detail']
+    assert by_id['owner-vault-read']['status'] == 'passed'
+
+
+def test_check_controls_respects_scoping(setup):
+    contract, scenario, labs, _ = setup
+    for control in contract['controls']:
+        if control['kind'] == 'negative':
+            control['scenarios'] = ['some-other-scenario']
+    rows = runtime.check_controls(scenario, contract, 'image')
+    assert {r['id'] for r in rows} == {'owner-vault-read', 'owner-export'}
+
+
+def _with_reachability(contract, scenario, needle='public'):
+    """Declare a positive reachability control: the sink echoes a marker."""
+    contract['oracles']['sink-marker'] = {
+        'invariant': 'vault-authorization',
+        'description': 'Attack input reached the sink',
+        'observe': {'kind': 'response', 'entry': 'request', 'channel': 'stdout', 'pointer': '/content'},
+        'predicate': {'op': 'contains', 'value': needle},
+    }
+    scenario['reachability'] = {
+        'steps': [dict(s) for s in scenario['steps']],
+        'oracle': 'sink-marker',
+        'expect': True,
+        'description': 'response carries the sink marker',
+    }
+
+
+def test_negative_verdict_splits_into_refuted_when_sink_reached(setup):
+    contract, scenario, labs, _ = setup
+    scenario['steps'] = [{'entry': 'request', 'input': {'operation': 'public.info'}}]
+    _with_reachability(contract, scenario)
+    result = runtime.replay(scenario, contract, 'image')
+    outcome = evidence.assess(result, scenario, contract)
+    assert outcome.disposition == 'refuted' and outcome.completed == 3
+    assert len(result['reachability']) == 3 and all(r['passed'] for r in result['reachability'])
+    assert len(labs) == 18  # 4 controls + attack + reachability, per trial
+
+
+def test_negative_verdict_is_inconclusive_when_sink_not_reached(setup):
+    contract, scenario, _, _ = setup
+    scenario['steps'] = [{'entry': 'request', 'input': {'operation': 'public.info'}}]
+    _with_reachability(contract, scenario, needle='never-appears')
+    result = runtime.replay(scenario, contract, 'image')
+    outcome = evidence.assess(result, scenario, contract)
+    assert outcome.disposition == 'inconclusive_setup'
+    assert all(not r['passed'] for r in result['reachability'])
+
+
+def test_broken_reachability_does_not_discard_a_confirmed_trial(setup, monkeypatch):
+    contract, scenario, _, _ = setup
+    _with_reachability(contract, scenario)
+    real_observe = runtime.observe
+    def observe(lab, steps, oracle, *, control=False):
+        if oracle.get('description') == 'Attack input reached the sink':
+            raise runtime.ReplayError('reachability probe died')
+        return real_observe(lab, steps, oracle, control=control)
+    monkeypatch.setattr(runtime, 'observe', observe)
+    result = runtime.replay(scenario, contract, 'image')
+    outcome = evidence.assess(result, scenario, contract)
+    assert outcome.confirmed and outcome.successes == 3
+    assert all(not r['passed'] and r['detail'].startswith('error:') for r in result['reachability'])
+
+
+def test_reachability_must_reference_a_known_oracle(setup):
+    contract, scenario, _, _ = setup
+    _with_reachability(contract, scenario)
+    scenario['reachability']['oracle'] = 'no-such-oracle'
+    with pytest.raises(contracts.ContractError, match='unknown oracle'):
+        runtime.replay(scenario, contract, 'image')
+
+
+def _with_subclaims(contract, scenario):
+    """Compound finding: core mechanism + an escalation sub-claim that does not hold."""
+    contract['oracles']['admin-marker'] = {
+        'invariant': 'vault-authorization',
+        'description': 'Response embeds an admin-only marker',
+        'observe': {'kind': 'response', 'entry': 'request', 'channel': 'stdout', 'pointer': '/content'},
+        'predicate': {'op': 'contains', 'value': 'admin-only'},
+    }
+    scenario['finding']['subclaims'] = [
+        {'id': 'core', 'claim': 'vault content reaches the caller',
+         'steps': [dict(s) for s in scenario['steps']], 'oracle': 'vault-response', 'expect': True},
+        {'id': 'escalation', 'claim': 'response embeds an admin-only marker',
+         'steps': [dict(s) for s in scenario['steps']], 'oracle': 'admin-marker', 'expect': True},
+    ]
+
+
+def test_subclaims_roll_up_next_to_the_main_verdict(setup):
+    contract, scenario, _, _ = setup
+    _with_subclaims(contract, scenario)
+    result = runtime.replay(scenario, contract, 'image')
+    outcome = evidence.assess(result, scenario, contract)
+    assert outcome.confirmed  # the main oracle stands on its own
+    assert outcome.subclaims == {'core': 'supported', 'escalation': 'refuted'}
+    assert 'escalation=refuted' in outcome.reason
+    assert len(result['subclaims']) == 6  # two sub-claims per trial
+
+
+@pytest.mark.parametrize('mutation', ['drop-row', 'orphan', 'undeclared'])
+def test_subclaim_rows_are_strictly_validated(setup, mutation):
+    contract, scenario, _, _ = setup
+    _with_subclaims(contract, scenario)
+    result = runtime.replay(scenario, contract, 'image')
+    if mutation == 'drop-row':
+        result['subclaims'] = result['subclaims'][1:]
+    elif mutation == 'orphan':
+        result['subclaims'].append({'subclaim_id': 'core', 'trial_id': 'trial-999',
+                                    'passed': True, 'detail': 'x'})
+    else:
+        result['subclaims'].append({'subclaim_id': 'no-such', 'trial_id': 'trial-000',
+                                    'passed': True, 'detail': 'x'})
+    with pytest.raises(contracts.ContractError):
+        evidence.assess(result, scenario, contract)
+
+
+def _pin_provenance(contract, Lab, monkeypatch, payload=b'const VAULT = "canary-source";'):
+    contract['artifact']['implicated_files'] = [
+        {'path': '/work/target/service.py', 'sha256': hashlib.sha256(payload).hexdigest()}]
+    Lab.files = {'/work/target/service.py': payload}
+    monkeypatch.setattr(Lab, 'read', lambda self, p: self.files[p], raising=False)
+
+
+def test_provenance_gate_passes_on_identical_bytes(setup, monkeypatch):
+    contract, scenario, _, Lab = setup
+    _pin_provenance(contract, Lab, monkeypatch)
+    result = runtime.replay(scenario, contract, 'image')
+    prov = result['artifact']['provenance']
+    assert prov['files'] == [{'path': '/work/target/service.py', 'status': 'identical'}]
+    assert prov['analyzed_commit'] == contract['artifact']['source_commit']
+    assert prov['tested_artifact'] == result['artifact']['image']
+    assert evidence.assess(result, scenario, contract).confirmed
+
+
+def test_provenance_drift_refuses_the_run(setup, monkeypatch):
+    contract, scenario, _, Lab = setup
+    _pin_provenance(contract, Lab, monkeypatch, payload=b'altered source')
+    contract['artifact']['implicated_files'][0]['sha256'] = '0' * 64
+    with pytest.raises(contracts.ContractError, match='provenance drift'):
+        runtime.replay(scenario, contract, 'image')
+
+
+def test_provenance_missing_file_refuses_the_run(setup, monkeypatch):
+    contract, scenario, _, Lab = setup
+    contract['artifact']['implicated_files'] = [
+        {'path': '/work/target/gone.py', 'sha256': '0' * 64}]
+    def read(self, p):
+        raise FileNotFoundError(p)
+    monkeypatch.setattr(Lab, 'read', read, raising=False)
+    with pytest.raises(contracts.ContractError, match='provenance drift'):
+        runtime.replay(scenario, contract, 'image')
+
+
+@pytest.mark.parametrize('mutation', ['drop-block', 'flag-drift', 'wrong-artifact'])
+def test_drifted_evidence_cannot_be_promoted(setup, monkeypatch, mutation):
+    contract, scenario, _, Lab = setup
+    _pin_provenance(contract, Lab, monkeypatch)
+    result = runtime.replay(scenario, contract, 'image')
+    if mutation == 'drop-block':
+        del result['artifact']['provenance']
+    elif mutation == 'flag-drift':
+        result['artifact']['provenance']['files'][0]['status'] = 'drift'
+    else:
+        result['artifact']['provenance']['tested_artifact'] = 'sha256:' + 'b' * 64
+    with pytest.raises(contracts.ContractError):
+        evidence.assess(result, scenario, contract)
+
+
+def test_implicated_files_reject_unsafe_paths(setup):
+    contract, scenario, _, _ = setup
+    contract['artifact']['implicated_files'] = [{'path': '../etc/passwd', 'sha256': '0' * 64}]
+    with pytest.raises(contracts.ContractError, match='unsafe absolute path'):
+        runtime.replay(scenario, contract, 'image')
 
 
 def test_unknown_network_mode_still_refused(monkeypatch):

@@ -13,6 +13,7 @@ not re-deriving mocks by copy-paste.
 | Transport | `acp_client.py` | raw ACP stdio client: deeplink injection + reverse-request answering |
 | Entry | `pty_driver.py` | run interactive CLI paths under a real PTY |
 | Boot | `boot.py` | spawn + wait-ready (health URL / port / file) + settle discipline |
+| Egress | `ssrf_canary.py` | SSRF primitive: public-looking redirect hop → internal canary, hit observation |
 | Verdict | `evidence.py` | controls → `replay-<id>.evidence.json`, one per finding |
 
 All adapters are stdlib-only Python 3, loopback-only, and keep stdout clean for
@@ -24,8 +25,10 @@ the observation JSON (diagnostics go to NDJSON logs).
    entry points, per-finding attack + controls, observation procedure. The
    contract is the oracle; adapters supply data, not judgement.
 2. **Image.** Build the victim from pinned source in a Dockerfile under the
-   target dir. Keep the lab directory mounted at runtime (`-v lab:/work/lab`) so
-   mock iterations never rebuild the image.
+   target dir. Mount, don't bake (W58): the lab directory AND this adapter
+   pack ride a runtime volume (`-v lab:/work/lab`,
+   `-v .../adapters:/work/adapters:ro`), so mock/adapter iterations never
+   rebuild the image. Rebuilds are for dependency changes only.
 3. **Model path.** Point the victim's provider config at `mock_llm.py`
    (`OPENAI_HOST`/`OPENAI_BASE_URL`-style env, dummy key). Write a scenario per
    finding: first step = what the model says on a fresh conversation, last step
@@ -73,6 +76,12 @@ the observation JSON (diagnostics go to NDJSON logs).
 - Fixture validation config must itself be valid: an invalid regex/glob in a
   rule matcher is usually skipped with a warning, and the "attack" then proves
   nothing — when a vector doesn't fire, suspect the fixture before the target.
+- SSRF class: never improvise egress. `ssrf_canary.py` gives the
+  public-looking first hop (`/redirect?to=`, prefix-restricted so it is not an
+  open relay) and the internal canary (`/canary/<token>` + `/hits`
+  observation). Template fixture: `tests/fixtures/ssrf_victim.py` +
+  `tests/test_ai_agent_ssrf_adapter.py`. On an internal-lan lab bind it to
+  `0.0.0.0` so the victim sees an RFC1918 peer.
 - Agent CLIs may gate features on sibling tooling being present (auth CLIs,
   runtimes); a shim on PATH is a legitimate lab device — document it in the
   image, never hide it.

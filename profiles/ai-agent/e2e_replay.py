@@ -40,11 +40,26 @@ def main(argv=None) -> int:
     ap.add_argument("--image", default="ai-agent-canary:e2e")
     ap.add_argument("--contract", default=str(_CANARY))
     ap.add_argument("--scenario", action="append", help="scenario JSON (repeatable); default = canary fixtures")
+    ap.add_argument("--check", action="store_true",
+                    help="pre-flight only: run each applicable control once and report (L61/W50 ritual)")
     args = ap.parse_args(argv)
 
     contract = contracts.load(args.contract, "target-contract")
     cases = [(s, None) for s in args.scenario] if args.scenario else \
             [(str(_FIX / name), exp) for name, exp in _CASES]
+
+    if args.check:
+        rc = 0
+        for path, _ in cases:
+            scenario = contracts.load(path, "scenario")
+            print(f"{Path(path).name}:")
+            for row in runtime.check_controls(scenario, contract, args.image):
+                flag = "OK" if row["status"] == "passed" else "BROKEN"
+                if row["status"] != "passed":
+                    rc = 1
+                print(f"    [{flag}] {row['id']} ({row['kind']}): {row['status']} — {row['detail']}")
+        print("CHECK_RESULT:", "PASS" if rc == 0 else "FAIL — fix the oracle/fixture before spending a batch")
+        return rc
 
     rc = 0
     for path, expected in cases:

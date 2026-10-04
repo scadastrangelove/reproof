@@ -42,5 +42,10 @@ Then:
 - <score>: 0.0-1.0 overall confidence in the static argument (NOT exploit reliability).
 - <evidence>: the decisive path:line citations and the single strongest counter-argument.
 - <overall>: PASS only if criteria 1-4 pass and 5 is honest; else FAIL.
+- <refutation_basis>: REQUIRED when overall is FAIL — quote the path:line of
+  the guard, gate, or caller contract that stops the candidate. A FAIL without
+  it is an unverified refute (L67): it carries no dismissive weight and is
+  treated as no-signal, never as proof the candidate is wrong.
 
-A FAIL on reachability (criterion 1) is decisive regardless of severity."""
+A FAIL on reachability (criterion 1) is decisive regardless of severity —
+but it too needs its quoted stopping point in <refutation_basis>."""

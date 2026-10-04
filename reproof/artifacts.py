@@ -157,7 +157,7 @@ class ReportVerdict:
 class MaintainerReviewVerdict:
     """The adversarial maintainer-review agent's (P1.3, LESSONS.md L13) verdict
     on a finding + its proposed fix — the pre-disclosure gate."""
-    verdict: str               # ACCEPT, DOWNGRADE, REJECT, WONTFIX
+    verdict: str               # ACCEPT, DOWNGRADE, REJECT, WONTFIX, UNVERIFIED_REFUTE
     corrected_severity: str    # CRITICAL, HIGH, MEDIUM, LOW, INFO
     reachability: str          # REACHABLE, CONSTRUCTION_ONLY, UNCLEAR
     fix_ok: bool

@@ -29,6 +29,8 @@ _DISPOSITION = {
     "confirmed": "real",
     "component_only": "contested",
     "not_observed": "unverified",
+    "refuted": "rejected",           # sink reached, no violation — a claim about the target
+    "inconclusive_setup": "unverified",  # sink not provably reached — a claim about the lab
     "unresolved": "unverified",
 }
 

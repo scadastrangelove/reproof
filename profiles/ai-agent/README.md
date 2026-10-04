@@ -69,6 +69,11 @@ target/campaign records and do not become finder hints.
 - [Evaluator fixtures](../../tests/fixtures/ai-agent-canary/): attack scenarios
   and a public-operation decoy, kept outside the finder image.
 
+Pre-flight ritual (L61/W50): before any replay batch, run the controls once —
+`python profiles/ai-agent/e2e_replay.py --check [--scenario S.json]`. A BROKEN
+row means the oracle or fixture is at fault (unresolvable pointer, wrong
+observed layer), not the target; fix it before spending a batch.
+
 The prototype Python modules require the optional dependency set:
 
 ```sh

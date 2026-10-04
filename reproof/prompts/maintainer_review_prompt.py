@@ -68,10 +68,17 @@ if you tried to dismiss it with one of your own guards and your own code refuted
 your dismissal (the guard doesn't actually cover this input), that CONFIRMS the
 finding; report it.
 
+A dismissal is a claim about YOUR code and needs the same proof as the report
+(L67): REJECT or WONTFIX is only valid when <rebuttals> quotes the `file:line`
+of the guard, gate, or caller contract that actually stops the finding. If you
+suspect the report is wrong but cannot quote the stopping code, emit
+UNVERIFIED_REFUTE instead — it does not count as a dismissal and routes the
+finding back for evidence, it does not close it.
+
 ## Output — exactly this block
 
 <maintainer_review>
-<verdict>ACCEPT | DOWNGRADE | REJECT | WONTFIX</verdict>
+<verdict>ACCEPT | DOWNGRADE | REJECT | WONTFIX | UNVERIFIED_REFUTE</verdict>
 <corrected_severity>CRITICAL | HIGH | MEDIUM | LOW | INFO</corrected_severity>
 <reachability>REACHABLE | CONSTRUCTION_ONLY | UNCLEAR</reachability>
 <fix_ok>YES | NO</fix_ok>

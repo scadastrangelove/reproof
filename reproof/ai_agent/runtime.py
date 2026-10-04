@@ -9,6 +9,7 @@ and must preserve the declared attacker entry (component adapters say so).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import math
 import os
@@ -249,12 +250,80 @@ def observe(lab: DockerLab, steps: list[dict], oracle: dict, *, control: bool = 
     return matched, value
 
 
+def applicable_controls(contract: dict, scenario_id: str) -> list[dict]:
+    """Controls scoped to this scenario (L62/W49): a control without a
+    `scenarios` list applies everywhere; otherwise only to the named ids."""
+    return [c for c in contract["controls"]
+            if "scenarios" not in c or scenario_id in c["scenarios"]]
+
+
+def check_controls(scenario: dict, contract: dict, image: str) -> list[dict]:
+    """Pre-flight (L61/W50): run each applicable control once and report.
+
+    Returns one row per control: {id, kind, expect, status, detail}, where
+    status is "passed" | "failed" | "error". "error" means the oracle or
+    fixture broke (unresolvable pointer, dead entry) — fix it before spending
+    a batch, because inside replay() the same failure surfaces as a trial
+    infrastructure_error and is indistinguishable from broken plumbing.
+    """
+    contract = validate_target(contract)
+    scenario = validate_scenario(scenario, contract)
+    image_id = image_identity(image)
+    rows = []
+    for control in applicable_controls(contract, scenario["scenario_id"]):
+        row = {"id": control["id"], "kind": control["kind"], "expect": control["expect"]}
+        try:
+            with victim_lab(image_id, contract) as lab:
+                matched, _ = observe(lab, control["steps"], contract["oracles"][control["oracle"]], control=True)
+            row["status"] = "passed" if matched == control["expect"] else "failed"
+            row["detail"] = f"expected={control['expect']}; observed={matched}"
+        except ReplayError as exc:
+            row["status"] = "error"
+            row["detail"] = str(exc)
+        rows.append(row)
+    return rows
+
+
+def verify_provenance(contract: dict, image_id: str) -> dict | None:
+    """L70/W54: assert the running artifact carries the exact bytes static
+    analysis saw, BEFORE any measurement. Drift is not a verdict — it means
+    the evidence would be about a different program, so the run is refused.
+    Returns the provenance block for the evidence, or None when the contract
+    pins no implicated files."""
+    declared = contract["artifact"].get("implicated_files")
+    if not declared:
+        return None
+    files = []
+    with victim_lab(image_id, contract) as lab:
+        for f in declared:
+            try:
+                actual = hashlib.sha256(lab.read(f["path"])).hexdigest()
+            except (ReplayError, OSError, UnicodeError):
+                actual = None
+            status = ("identical" if actual is not None and actual == f["sha256"]
+                      else "missing" if actual is None else "drift")
+            files.append({"path": f["path"], "status": status})
+    provenance = {"analyzed_commit": contract["artifact"]["source_commit"],
+                  "tested_artifact": image_id, "files": files}
+    bad = [f["path"] for f in files if f["status"] != "identical"]
+    if bad:
+        raise ContractError(
+            "provenance drift: artifact bytes differ from the analyzed commit for: "
+            + ", ".join(bad))
+    return provenance
+
+
 def replay(scenario: dict, contract: dict, image: str) -> dict:
     """Freeze inputs, run every scheduled trial, reset between controls/attacks."""
     contract = validate_target(contract)
     scenario = validate_scenario(scenario, contract)
     image_id = image_identity(image)
+    provenance = verify_provenance(contract, image_id)
     oracle = contract["oracles"].get(scenario["oracle"])
+    controls = applicable_controls(contract, scenario["scenario_id"])
+    if {c["kind"] for c in controls} != {"positive", "negative"}:
+        raise ContractError(
+            f"scenario {scenario['scenario_id']}: scoped controls must keep both positive and negative kinds")
     scopes = {contract["entries"][s["entry"]]["scope"] for s in scenario["steps"]}
     scope = ("component" if "component" in scopes or "static_path" in scopes
              else "full_chain" if len(scenario["steps"]) > 1 else "shipping_entrypoint")
@@ -267,10 +336,12 @@ def replay(scenario: dict, contract: dict, image: str) -> dict:
         "oracle": scenario["oracle"], "invariant": scenario["finding"]["invariant"],
         "collector": {"name": "docker-external-observer", "version": COLLECTOR_VERSION,
                       "boundary": "orchestrator captures victim output; credentials and evaluator outside victim"},
-        "observations": [], "controls": [], "trials": [],
+        "observations": [], "controls": [], "reachability": [], "subclaims": [], "trials": [],
         "scheduled_trials": contract["runtime"]["trials"], "discovery_attempts": None,
         "coverage": [], "notes": ["Existence and reliability are separate; finite negatives are not immunity."],
     }
+    if provenance is not None:
+        evidence["artifact"]["provenance"] = provenance
     for index in range(evidence["scheduled_trials"]):
         trial_id = f"trial-{index:03d}"
         start = time.monotonic()
@@ -281,7 +352,7 @@ def replay(scenario: dict, contract: dict, image: str) -> dict:
         try:
             if oracle is None or oracle["invariant"] != scenario["finding"]["invariant"]:
                 raise UnsupportedReplay("new oracle/invariant needs a reviewed observation adapter")
-            for control in contract["controls"]:
+            for control in controls:
                 with victim_lab(image_id, contract) as lab:
                     matched, _ = observe(lab, control["steps"], contract["oracles"][control["oracle"]], control=True)
                 passed = matched == control["expect"]
@@ -298,6 +369,36 @@ def replay(scenario: dict, contract: dict, image: str) -> dict:
                 "detail": "Predicate evaluated by independent collector against freshly initialized target"})
             trial["observation_ids"] = [observation_id]
             trial["violation"] = matched
+            reach = scenario.get("reachability")
+            if reach is not None:
+                # L66/W51: positive reachability control, independent of the
+                # vulnerability oracle. Its own try: a broken reachability
+                # observation must not discard a completed attack trial — it
+                # only downgrades a later negative verdict to inconclusive_setup.
+                try:
+                    with victim_lab(image_id, contract) as lab:
+                        r_matched, _ = observe(lab, reach["steps"], contract["oracles"][reach["oracle"]],
+                                               control=True)
+                    evidence["reachability"].append({"trial_id": trial_id,
+                        "passed": r_matched == reach["expect"],
+                        "detail": f"expected={reach['expect']}; observed={r_matched}"})
+                except (ReplayError, ContractError, UnicodeError, OSError) as exc:
+                    evidence["reachability"].append({"trial_id": trial_id, "passed": False,
+                                                     "detail": f"error: {exc}"})
+            for sub in scenario["finding"].get("subclaims", []):
+                # L68/W52: each sub-claim is its own control with its own
+                # verdict; a broken sub-claim observation never discards the
+                # completed attack trial.
+                try:
+                    with victim_lab(image_id, contract) as lab:
+                        s_matched, _ = observe(lab, sub["steps"], contract["oracles"][sub["oracle"]],
+                                               control=True)
+                    evidence["subclaims"].append({"subclaim_id": sub["id"], "trial_id": trial_id,
+                        "passed": s_matched == sub["expect"],
+                        "detail": f"expected={sub['expect']}; observed={s_matched}"})
+                except (ReplayError, ContractError, UnicodeError, OSError) as exc:
+                    evidence["subclaims"].append({"subclaim_id": sub["id"], "trial_id": trial_id,
+                                                  "passed": False, "detail": f"error: {exc}"})
         except (ReplayError, ContractError, UnicodeError, OSError) as exc:
             trial.update(status="unsupported" if isinstance(exc, UnsupportedReplay) else "infrastructure_error",
                          violation=None, error=str(exc))

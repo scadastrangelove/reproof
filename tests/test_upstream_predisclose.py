@@ -58,10 +58,25 @@ def test_parse_missing_verdict_tag_returns_none():
 
 
 def test_parse_defaults_severity_and_reachability_when_absent():
+    # L67/W53: a REJECT without a quoted file:line in <rebuttals> is not a
+    # dismissal — it is reclassified as an unverified refute.
     text = ("<maintainer_review>\n<verdict>REJECT</verdict>\n"
             "<fix_ok>NO</fix_ok>\n</maintainer_review>")
     v = _parse_maintainer_review(text)
-    assert v.verdict == "REJECT"
+    assert v.verdict == "UNVERIFIED_REFUTE"
     assert v.corrected_severity == "LOW"       # default, per _parse_token's fallback
     assert v.reachability == "UNCLEAR"          # default
     assert v.fix_ok is False
+
+
+def test_source_cited_reject_stays_a_reject():
+    text = REVIEW_BLOCK.replace("<verdict>ACCEPT</verdict>", "<verdict>REJECT</verdict>")
+    v = _parse_maintainer_review(text)
+    assert v.verdict == "REJECT"  # rebuttals quote argstack.rs:38
+
+
+def test_unverified_refute_token_parses_through():
+    text = ("<maintainer_review>\n<verdict>UNVERIFIED_REFUTE</verdict>\n"
+            "</maintainer_review>")
+    v = _parse_maintainer_review(text)
+    assert v.verdict == "UNVERIFIED_REFUTE"

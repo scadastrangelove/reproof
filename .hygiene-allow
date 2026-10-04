@@ -1,0 +1,9 @@
+# Hygiene-lint allowlist (L69/W55) — one Python regex per line, matched per
+# line. Meta-references only: docs describing the rules and the linter's own
+# pattern source. Never allowlist a real host, user, path, or credential here
+# (synthetic test fixtures are constructed dynamically so they never appear
+# literally in the source).
+/Users/\.\.\.
+local absolute path
+85\.10\.20\.30
+_LOCAL_PATH

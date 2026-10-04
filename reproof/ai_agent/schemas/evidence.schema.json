@@ -37,6 +37,55 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 8192
+        },
+        "provenance": {
+          "type": "object",
+          "description": "Byte-identity proof between the analyzed commit and the tested artifact (L70/W54); required when the contract pins implicated_files.",
+          "properties": {
+            "analyzed_commit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "tested_artifact": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "status": {
+                    "enum": [
+                      "identical",
+                      "drift",
+                      "missing"
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 256
+            }
+          },
+          "required": [
+            "analyzed_commit",
+            "tested_artifact",
+            "files"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -179,6 +228,69 @@
           "id",
           "trial_id",
           "kind",
+          "passed",
+          "detail"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10000
+    },
+    "reachability": {
+      "type": "array",
+      "description": "Per-trial reachability control rows (L66/W51); optional for backward compatibility with pre-W51 evidence.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "trial_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "trial_id",
+          "passed",
+          "detail"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10000
+    },
+    "subclaims": {
+      "type": "array",
+      "description": "Per-sub-claim, per-trial control rows (L68/W52); optional for backward compatibility.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "subclaim_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "trial_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "subclaim_id",
+          "trial_id",
           "passed",
           "detail"
         ],

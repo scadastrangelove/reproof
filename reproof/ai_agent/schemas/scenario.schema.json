@@ -49,6 +49,62 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 8192
+        },
+        "subclaims": {
+          "type": "array",
+          "description": "Optional compound-claim decomposition (L68/W52): each sub-claim is its own control with its own verdict; the finding verdict rolls up which sub-claims stand.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              },
+              "claim": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "entry": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                    },
+                    "input": {}
+                  },
+                  "required": [
+                    "entry",
+                    "input"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 64
+              },
+              "oracle": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              },
+              "expect": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "claim",
+              "steps",
+              "oracle",
+              "expect"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": false
         }
       },
       "required": [
@@ -145,6 +201,50 @@
     "oracle": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "reachability": {
+      "type": "object",
+      "description": "Optional positive reachability control (L66/W51): proves the attack input reached the sink, independent of the vulnerability oracle. Without it a negative verdict stays 'not_observed' instead of splitting into refuted vs inconclusive_setup.",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entry": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              },
+              "input": {}
+            },
+            "required": [
+              "entry",
+              "input"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "oracle": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "expect": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "steps",
+        "oracle",
+        "expect"
+      ],
+      "additionalProperties": false
     },
     "steps": {
       "type": "array",

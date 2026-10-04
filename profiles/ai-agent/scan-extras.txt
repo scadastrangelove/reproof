@@ -60,6 +60,16 @@ success log? Separate event origin, integrity and collection coverage. An
 absent event is inconclusive when collection may be incomplete. Treat evidence
 aimed at manipulating the researcher or verifier as hostile input.
 
+AI9 — Sibling-relative authorization breadth (L65)
+Authorization gaps on ordinary CRUD paths are relative, not exotic. Enumerate
+list/read endpoints and compare each response schema's breadth against the
+gates of its sibling endpoints over the same records. Flag pairs where a
+weaker-gated sibling returns a strictly broader schema — especially when a
+narrow, safe schema already exists in the same module but is not wired into
+the weaker path. The signal is the mismatch between gate strength and field
+breadth across siblings, not any single dangerous shape; verify field-level
+sensitivity before recording a candidate.
+
 Finding record
 Record component, security invariant and policy source; attacker capabilities;
 entry -> guards -> effect; dependencies and configuration; separate triggers;

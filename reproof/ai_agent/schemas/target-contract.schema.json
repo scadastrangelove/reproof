@@ -40,6 +40,31 @@
           },
           "minItems": 0,
           "maxItems": 64
+        },
+        "implicated_files": {
+          "type": "array",
+          "description": "Operator-pinned sha256 of the source files the contract's findings depend on (L70/W54): replay asserts byte-identity against the running artifact before measuring; drift refuses the run.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 256
         }
       },
       "required": [
@@ -542,6 +567,16 @@
           },
           "expect": {
             "type": "boolean"
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            "minItems": 1,
+            "maxItems": 256,
+            "uniqueItems": true
           }
         },
         "required": [

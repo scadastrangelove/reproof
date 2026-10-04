@@ -110,6 +110,15 @@ def validate_target(value: dict) -> dict:
     principals = set(value["policy"]["principals"])
     invariants = value["policy"]["invariants"]
     fixtures = value["fixtures"]
+    seen_implicated = set()
+    for f in value["artifact"].get("implicated_files", []):
+        path = f["path"]
+        if (not path.startswith("/") or "\x00" in path
+                or ".." in PurePosixPath(path).parts):
+            raise ContractError("implicated_files: unsafe absolute path")
+        if path in seen_implicated:
+            raise ContractError("implicated_files: duplicate path")
+        seen_implicated.add(path)
     for name, entry in value["entries"].items():
         if entry["actor"] not in principals:
             raise ContractError(f"entry {name}: unknown principal")
@@ -173,6 +182,21 @@ def validate_scenario(value: dict, contract: dict | None = None) -> dict:
         declared_triggers = {(t["actor"], t["authority"]) for t in value["path"]["triggers"]}
         if actual_triggers != declared_triggers:
             raise ContractError("separate trigger actors/authority must be declared exactly")
+        reach = value.get("reachability")
+        if reach is not None:
+            # Operator-defined control, not attacker data: fixture substitution
+            # applies at replay time, so its steps MAY use control-role entries.
+            _validate_steps(reach["steps"], contract)
+            if reach["oracle"] not in contract["oracles"]:
+                raise ContractError("reachability control refers to an unknown oracle")
+        subclaims = value["finding"].get("subclaims", [])
+        if len({s["id"] for s in subclaims}) != len(subclaims):
+            raise ContractError("subclaim IDs must be unique")
+        for sub in subclaims:
+            # Same operator-defined standing as the reachability control.
+            _validate_steps(sub["steps"], contract)
+            if sub["oracle"] not in contract["oracles"]:
+                raise ContractError(f"subclaim {sub['id']}: unknown oracle")
         # Unknown oracle/invariant is intentionally NOT a malformed candidate.
         # Replay records it as unsupported; the new hypothesis survives for review.
     return value

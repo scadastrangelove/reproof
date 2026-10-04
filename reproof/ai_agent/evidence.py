@@ -6,7 +6,7 @@ must not promote an imported file by calling it a trusted replay.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .contracts import ContractError, digest, validate
 
@@ -18,6 +18,7 @@ class Assessment:
     successes: int
     completed: int
     scheduled: int
+    subclaims: dict = field(default_factory=dict)  # subclaim id -> supported|refuted|mixed|unresolved
 
     @property
     def confirmed(self) -> bool:
@@ -34,6 +35,16 @@ def validate_evidence(data: dict, scenario: dict, contract: dict) -> dict:
         raise ContractError("evidence artifact configuration mismatch")
     if data["artifact"]["source_commit"] != contract["artifact"]["source_commit"]:
         raise ContractError("evidence source pin mismatch")
+    if contract["artifact"].get("implicated_files"):
+        prov = data["artifact"].get("provenance")
+        if prov is None:
+            raise ContractError("evidence is missing the provenance block")
+        if prov["analyzed_commit"] != contract["artifact"]["source_commit"]:
+            raise ContractError("provenance analyzed-commit mismatch")
+        if prov["tested_artifact"] != data["artifact"]["image"]:
+            raise ContractError("provenance tested-artifact mismatch")
+        if any(f["status"] != "identical" for f in prov["files"]):
+            raise ContractError("evidence comes from a drifted artifact")
     if data["oracle"] != scenario["oracle"] or data["invariant"] != scenario["finding"]["invariant"]:
         raise ContractError("evidence changes the requested oracle/invariant")
     if data["scheduled_trials"] != contract["runtime"]["trials"]:
@@ -48,14 +59,16 @@ def validate_evidence(data: dict, scenario: dict, contract: dict) -> dict:
         raise ContractError("orphan observation")
     if any(digest(o["value"]) != o["value_digest"] for o in observations.values()):
         raise ContractError("observation value digest mismatch")
-    control_ids = {c["id"] for c in contract["controls"]}
+    from .runtime import applicable_controls  # local import: evidence must not import docker plumbing at module load
+    applicable = {c["id"]: c for c in applicable_controls(contract, scenario["scenario_id"])}
+    control_ids = set(applicable)
     control_pairs = set()
     for control in data["controls"]:
         pair = control["trial_id"], control["id"]
         if pair in control_pairs or pair[0] not in trial_ids or pair[1] not in control_ids:
             raise ContractError("duplicate or orphan control")
         control_pairs.add(pair)
-        expected = next(c for c in contract["controls"] if c["id"] == pair[1])
+        expected = applicable[pair[1]]
         if control["kind"] != expected["kind"]:
             raise ContractError("control kind mismatch")
     for trial in data["trials"]:
@@ -80,6 +93,28 @@ def validate_evidence(data: dict, scenario: dict, contract: dict) -> dict:
     referenced = {ref for t in data["trials"] for ref in t["observation_ids"]}
     if referenced != set(observations):
         raise ContractError("unreferenced observation")
+    reach_rows = data.get("reachability", [])
+    reach_trials = set()
+    for row in reach_rows:
+        if row["trial_id"] in reach_trials or row["trial_id"] not in trial_ids:
+            raise ContractError("duplicate or orphan reachability row")
+        reach_trials.add(row["trial_id"])
+    if scenario.get("reachability") is not None:
+        for trial in data["trials"]:
+            if trial["status"] == "completed" and trial["id"] not in reach_trials:
+                raise ContractError("completed trial is missing its reachability control")
+    declared_subs = {s["id"] for s in scenario["finding"].get("subclaims", [])}
+    sub_pairs = set()
+    for row in data.get("subclaims", []):
+        pair = row["subclaim_id"], row["trial_id"]
+        if pair in sub_pairs or row["trial_id"] not in trial_ids or row["subclaim_id"] not in declared_subs:
+            raise ContractError("duplicate or orphan subclaim row")
+        sub_pairs.add(pair)
+    for trial in data["trials"]:
+        if trial["status"] == "completed":
+            missing = {sid for sid in declared_subs if (sid, trial["id"]) not in sub_pairs}
+            if missing:
+                raise ContractError("completed trial is missing subclaim controls")
     return data
 
 
@@ -87,8 +122,25 @@ def assess(data: dict, scenario: dict, contract: dict) -> Assessment:
     data = validate_evidence(data, scenario, contract)
     completed = [t for t in data["trials"] if t["status"] == "completed"]
     successes = sum(t["violation"] is True for t in completed)
+    # L68/W52: roll up each declared sub-claim over the completed trials.
+    completed_ids = {t["id"] for t in completed}
+    sub_verdicts = {}
+    for sub in scenario["finding"].get("subclaims", []):
+        rows = [r for r in data.get("subclaims", [])
+                if r["subclaim_id"] == sub["id"] and r["trial_id"] in completed_ids]
+        if not rows:
+            sub_verdicts[sub["id"]] = "unresolved"
+        elif all(r["passed"] for r in rows):
+            sub_verdicts[sub["id"]] = "supported"
+        elif not any(r["passed"] for r in rows):
+            sub_verdicts[sub["id"]] = "refuted"
+        else:
+            sub_verdicts[sub["id"]] = "mixed"
     def result(disposition: str, reason: str) -> Assessment:
-        return Assessment(disposition, reason, successes, len(completed), data["scheduled_trials"])
+        if sub_verdicts:
+            reason += " | subclaims: " + ", ".join(f"{k}={v}" for k, v in sub_verdicts.items())
+        return Assessment(disposition, reason, successes, len(completed), data["scheduled_trials"],
+                          subclaims=sub_verdicts)
     oracle = contract["oracles"].get(scenario["oracle"])
     if oracle is None or oracle["invariant"] != scenario["finding"]["invariant"]:
         return result("unresolved", "New oracle/invariant requires an independently reviewed verifier")
@@ -108,4 +160,12 @@ def assess(data: dict, scenario: dict, contract: dict) -> Assessment:
         return result("confirmed", "Independent replay observed an invariant violation; reliability is reported separately")
     if len(completed) != data["scheduled_trials"]:
         return result("unresolved", "No observed violation and some scheduled trials were not evaluable")
+    # L66/W51: a negative verdict is only a refutation when the attack provably
+    # reached the sink. Without a declared reachability control the verdict
+    # stays the historical, weaker "not_observed".
+    if scenario.get("reachability") is not None:
+        reached = {r["trial_id"] for r in data.get("reachability", []) if r["passed"]}
+        if reached >= {t["id"] for t in completed}:
+            return result("refuted", "Attack input reached the sink and no violation was observed within this configuration and trial budget")
+        return result("inconclusive_setup", "Attack input did not provably reach the sink; fix the setup before reading this as a refutation")
     return result("not_observed", "No violation observed within this configuration and trial budget")
