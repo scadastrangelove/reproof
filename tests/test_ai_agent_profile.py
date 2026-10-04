@@ -122,6 +122,9 @@ def test_find_prompt_carries_contract_catalog():
         assert eid in p
     for oid in contract["oracles"]:
         assert oid in p
+    for o in contract["oracles"].values():
+        assert o["invariant"] in p  # finder must reuse the oracle's invariant verbatim
+    assert "invariant=" in p
     for marker in ('"schema_version": 1', "additionalProperties:false",
                    "role=attacker", "SCENARIO FORMAT"):
         assert marker in p
