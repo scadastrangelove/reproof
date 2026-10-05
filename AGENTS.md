@@ -53,6 +53,18 @@ backend contract tests (`tests/test_agent_kimi.py`, fixtures in
 Docker in the default suite; `canary` / `rust-canary` are the live
 integration paths on a Linux host.
 
+## Commits
+
+Credit the AI pair-programmer in commit messages, same convention as the
+upstream port (which carries `Co-Authored-By: Claude ...` trailers): work
+done by a Kimi session gets
+
+    Co-authored-by: kimi-agent-bot <kimi-agent-bot@users.noreply.github.com>
+
+The noreply address resolves to a GitHub account, so co-authored commits
+show up in the contributors graph. Don't rewrite published history to add
+trailers retroactively — the convention applies to new commits.
+
 ## Gotchas
 
 - **The agent backend is Kimi Code CLI 2.1.1** (`reproof/agent_image.py:KIMI_CODE_VERSION`),
