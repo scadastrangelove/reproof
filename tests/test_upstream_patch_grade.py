@@ -293,7 +293,7 @@ def test_reattack_clean_when_no_crash(mock_docker):
         ]
     )
     with patch(
-        "reproof.patch_grade.run_find", new=AsyncMock(return_value=(None, None, {}))
+        "reproof.patch_grade.run_find", new=AsyncMock(return_value=([], None, {}))
     ):
         v = asyncio.run(grade_patch(CANARY, ALPHA_CRASH, DIFF, model="m"))
     assert v.re_attack_clean
@@ -318,7 +318,7 @@ def test_reattack_dirty_when_same_signature(mock_docker):
     )
     with patch(
         "reproof.patch_grade.run_find",
-        new=AsyncMock(return_value=(same_crash, None, {})),
+        new=AsyncMock(return_value=([same_crash], None, {})),
     ):
         v = asyncio.run(grade_patch(CANARY, ALPHA_CRASH, DIFF, model="m"))
     assert not v.re_attack_clean
@@ -344,7 +344,7 @@ def test_reattack_any_crash_fails(mock_docker):
     )
     with patch(
         "reproof.patch_grade.run_find",
-        new=AsyncMock(return_value=(other_crash, None, {})),
+        new=AsyncMock(return_value=([other_crash], None, {})),
     ):
         v = asyncio.run(grade_patch(CANARY, ALPHA_CRASH, DIFF, model="m"))
     assert v.re_attack_clean is False

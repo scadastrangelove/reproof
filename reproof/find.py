@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 
 from . import docker_ops, sandbox
-from .agent_kimi import run_agent, parse_xml_tag, AgentResult
+from .agent_kimi import run_agent, parse_xml_tag, normalize_message_text, AgentResult
 from .artifacts import CrashArtifact
 from .config import TargetConfig
 from .profiles import get_profile
@@ -33,11 +33,12 @@ async def run_find(
     system_prompt: str | None = None,
     max_resume_attempts: int = 20,
     patched: bool = False,
-) -> tuple[CrashArtifact | None, AgentResult, dict[str, float]]:
+) -> tuple[list[CrashArtifact], AgentResult, dict[str, float]]:
     """Run one find attempt against a target.
 
-    Returns (crash_or_none, agent_result, timings).
-    crash is None if no PoC was emitted or the claimed path was empty.
+    Returns (crashes, agent_result, timings) — every complete submission the
+    agent emitted (W64: one run may yield several candidates; the first-submit-
+    and-stop ceiling cost real recall). Empty list if no usable submission.
 
     Assumes the image is already built (caller owns docker_ops.build).
     """
@@ -75,33 +76,45 @@ async def run_find(
         )
         timings["find"] = time.time() - t0
 
-        # Parse tags — scan backwards, don't trust the last message
-        text = result.find_tagged_message("poc_path")
+        return extract_crashes(result, container), result, timings
+
+
+def extract_crashes(result: AgentResult, container: str) -> list[CrashArtifact]:
+    """Every complete submission in the run, in first-seen poc_path order.
+
+    A submission is an assistant message carrying a full `<poc_path>...</poc_path>`
+    pair. The LAST tag block per poc_path wins (agents sometimes revise and
+    resubmit the same file); the bytes are read once at run end, so they are
+    the final on-disk version either way. Submissions missing a reproduction
+    command, or whose claimed file is empty/never written, are dropped.
+    """
+    by_path: dict[str, dict] = {}
+    for msg in result.messages:
+        text = normalize_message_text(msg)
+        if text is None or "<poc_path>" not in text:
+            continue
         poc_path = parse_xml_tag(text, "poc_path")
         reproduction_command = parse_xml_tag(text, "reproduction_command")
-        crash_type = parse_xml_tag(text, "crash_type")
-        crash_output = parse_xml_tag(text, "crash_output") or ""
-        exit_code_str = parse_xml_tag(text, "exit_code")
-        dup_check = parse_xml_tag(text, "dup_check")
-
         if not poc_path or not reproduction_command:
-            return None, result, timings
-
-        # Empty bytes → agent narrated a path it never wrote.
-        poc_bytes = docker_ops.read_file(container, poc_path)
-        if not poc_bytes:
-            return None, result, timings
-
-        crash = CrashArtifact(
+            continue
+        by_path[poc_path] = dict(
             poc_path=poc_path,
-            poc_bytes=poc_bytes,
             reproduction_command=reproduction_command,
-            crash_type=crash_type or "unknown",
-            crash_output=crash_output[:10_000],  # ASAN traces are huge; top is what matters
-            exit_code=_parse_exit_code(exit_code_str),
-            dup_check=dup_check,
+            crash_type=parse_xml_tag(text, "crash_type") or "unknown",
+            # ASAN traces are huge; top is what matters
+            crash_output=(parse_xml_tag(text, "crash_output") or "")[:10_000],
+            exit_code=_parse_exit_code(parse_xml_tag(text, "exit_code")),
+            dup_check=parse_xml_tag(text, "dup_check"),
         )
-        return crash, result, timings
+
+    crashes: list[CrashArtifact] = []
+    for fields in by_path.values():
+        # Empty bytes → agent narrated a path it never wrote.
+        poc_bytes = docker_ops.read_file(container, fields["poc_path"])
+        if not poc_bytes:
+            continue
+        crashes.append(CrashArtifact(poc_bytes=poc_bytes, **fields))
+    return crashes
 
 
 def _parse_exit_code(s: str | None) -> int:

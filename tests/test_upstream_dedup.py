@@ -155,6 +155,22 @@ def test_dedup_skips_null_crash(tmp_path):
     assert total == 4
 
 
+def test_dedup_includes_multi_candidate_files(tmp_path):
+    """W64: one run may write result.json + result_2.json + ... — every
+    candidate file must reach dedup/aggregate, not just the primary."""
+    root = tmp_path / "batch"
+    _write_result(root / "run_000" / "result.json", "crash_rejected",
+                  "heap-buffer-overflow", ASAN_TRACE_A)
+    _write_result(root / "run_000" / "result_2.json", "crash_found",
+                  "stack-buffer-overflow", ASAN_TRACE_B)
+    groups = dedup(root)
+    sig_a = ("heap-buffer-overflow", "decode_chunk /work/decoder.h:4521")
+    sig_b = ("stack-buffer-overflow", "parse_bravo /work/entry.c:40")
+    assert sig_a in groups and sig_b in groups
+    # same run, two distinct candidates → both visible, one vote each
+    assert len(groups[sig_a]) == 1 and len(groups[sig_b]) == 1
+
+
 def test_dedup_walks_nested_batches(tmp_path):
     # Two timestamp dirs, each with a single-run layout (no run_NNN subdir)
     target_root = tmp_path / "results" / "synthetic"

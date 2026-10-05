@@ -44,9 +44,12 @@ def dedup(results_root: Path) -> dict[tuple[str, str], list[tuple[Path, str, dic
     Skips results where crash is null. Silently skips unreadable/malformed
     files — a half-written result.json from a killed run shouldn't abort
     the whole report.
+
+    Matches result*.json, not just result.json: W64 multi-candidate runs write
+    result_2.json, result_3.json, ... alongside the primary.
     """
     groups: dict[tuple[str, str], list[tuple[Path, str, dict]]] = defaultdict(list)
-    for path in sorted(results_root.rglob("result.json")):
+    for path in sorted(results_root.rglob("result*.json")):
         try:
             result = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):

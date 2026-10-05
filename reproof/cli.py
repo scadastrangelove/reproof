@@ -235,25 +235,27 @@ def _resume_layout_error(results_root: Path, runs: int) -> str | None:
     return None
 
 
-def _write_result(out_dir: Path, result: RunResult) -> None:
+def _write_result(out_dir: Path, result: RunResult, suffix: str = "") -> None:
     # out_dir already exists (created before run_find); transcripts already
-    # streamed to disk by run_agent. Only poc.bin and result.json left.
+    # streamed to disk by run_agent. Only poc bytes and result JSON left.
+    # suffix picks the candidate slot: "" → poc.bin/result.json, "_2" →
+    # poc_2.bin/result_2.json (W64: one run may grade several candidates).
 
     # PoC bytes if we have them
     if result.crash:
-        with open(out_dir / "poc.bin", "wb") as f:
+        with open(out_dir / f"poc{suffix}.bin", "wb") as f:
             f.write(result.crash.poc_bytes)
 
-    # result.json — strip transcripts to keep it readable (they're in the JSONLs)
+    # result JSON — strip transcripts to keep it readable (they're in the JSONLs)
     slim = result.to_dict()
     slim["find_transcript"] = f"see find_transcript.jsonl ({len(result.find_transcript)} messages)"
-    slim["grade_transcript"] = f"see grade_transcript.jsonl ({len(result.grade_transcript)} messages)"
+    slim["grade_transcript"] = f"see grade_transcript{suffix}.jsonl ({len(result.grade_transcript)} messages)"
     # Pipeline-parsed classification: deterministic crash_type / severity /
     # operation. Sits alongside the agent-emitted crash_type so downstream
     # consumers can cross-check (the agent tag is free-text and fragments).
     if result.crash:
         slim["crash"]["reason"] = detector_for_output(result.crash.crash_output).crash_reason(result.crash.crash_output)
-    with open(out_dir / "result.json", "w") as f:
+    with open(out_dir / f"result{suffix}.json", "w") as f:
         json.dump(slim, f, indent=2)
 
 
@@ -298,7 +300,7 @@ async def _run_once(
     focus_note = f" (focus: {focus_area})" if focus_area else ""
     print(color(f"[find:{run_idx}] Starting find agent (model={model}, max_turns={max_turns}){focus_note} ...", "find"))
     try:
-        crash, find_result, find_timings = await run_find(
+        crashes, find_result, find_timings = await run_find(
             target, model=model, max_turns=max_turns, agent_env=agent_env,
             container_name=find_container, focus_area=focus_area,
             known_bugs=known_bugs,
@@ -330,7 +332,7 @@ async def _run_once(
             error=f"find agent: {find_result.error}",
         ))
 
-    if crash is None:
+    if not crashes:
         print(f"[find:{run_idx}] No crash artifact emitted.")
         return _done(RunResult(
             target=target.name, status="no_crash_found",
@@ -338,91 +340,124 @@ async def _run_once(
             find_transcript=find_transcript, timings=timings,
         ))
 
-    print(color(f"[find:{run_idx}] Crash claimed: {crash.crash_type} at {crash.poc_path} ({len(crash.poc_bytes)} bytes)", "red"))
+    if len(crashes) > 1:
+        print(color(f"[find:{run_idx}] {len(crashes)} candidates submitted (W64 multi-candidate).", "red"))
 
-    # <dup_check> is mandatory alongside <poc_path>. The agent makes the
-    # judgment (it knows root cause, a regex can't), the pipeline enforces
-    # that the judgment happened. Reject before jsonl write so an unchecked
-    # crash doesn't pollute siblings' dedup context.
-    if crash.dup_check is None:
-        print(f"[find:{run_idx}] Rejected: missing <dup_check> tag.")
-        return _done(RunResult(
-            target=target.name, status="agent_failed",
-            crash=crash, verdict=None,
-            find_transcript=find_transcript, timings=timings,
-            error="find agent: <dup_check> tag missing — submission rejected",
-        ))
+    # ── Per-candidate: dup_check gate → record → grade ───────────────────────
+    # W64: one run may submit several distinct candidates. Each gets its own
+    # grade container, result file (result.json / result_2.json / ...) and
+    # stream dispatch. A candidate failing the dup_check gate is dropped
+    # without sinking the rest of the run.
+    outcomes: list[tuple[CrashArtifact, object, list[dict], str | None]] = []
+    #                                               ^ verdict | None
+    for k, crash in enumerate(crashes):
+        suffix = "" if k == 0 else f"_{k + 1}"
+        print(color(f"[find:{run_idx}] Crash claimed ({k + 1}/{len(crashes)}): "
+                    f"{crash.crash_type} at {crash.poc_path} ({len(crash.poc_bytes)} bytes)", "red"))
 
-    # Record it for siblings before grading — grading can take ~20min and a
-    # concurrent agent shouldn't spend that window re-discovering the same bug.
-    # Entries are framed as "claims" in the prompt, not confirmed crashes.
-    if found_bugs_path:
-        _append_found(found_bugs_path, crash, run_idx)
+        # <dup_check> is mandatory alongside <poc_path>. The agent makes the
+        # judgment (it knows root cause, a regex can't), the pipeline enforces
+        # that the judgment happened. Reject before jsonl write so an unchecked
+        # crash doesn't pollute siblings' dedup context.
+        if crash.dup_check is None:
+            print(f"[find:{run_idx}] Candidate {k + 1} rejected: missing <dup_check> tag.")
+            continue
 
-    if find_only:
-        return _done(RunResult(
-            target=target.name, status="no_crash_found",  # ungraded → not confirmed
-            crash=crash, verdict=None,
-            find_transcript=find_transcript, timings=timings,
-        ))
+        # Record it for siblings before grading — grading can take ~20min and a
+        # concurrent agent shouldn't spend that window re-discovering the same bug.
+        # Entries are framed as "claims" in the prompt, not confirmed crashes.
+        if found_bugs_path:
+            _append_found(found_bugs_path, crash, run_idx)
 
-    # ── Grade ────────────────────────────────────────────────────────────────────
-    print(color(f"[grade:{run_idx}] Starting grader agent in fresh container ...", "grade"))
-    workspace = out_dir / "grade_workspace"
-    try:
-        verdict, grade_result, grade_elapsed = await run_grade(
-            crash, target, model=model, workspace_dir=str(workspace), agent_env=agent_env,
-            container_name=grade_container,
-            transcript_path=str(out_dir / "grade_transcript.jsonl"),
-            progress_prefix=f"[grade:{run_idx}]",
-            system_prompt=system_prompt,
-        )
-    except Exception as e:
-        traceback.print_exc()
-        return _done(RunResult(
-            target=target.name, status="agent_failed",
-            crash=crash, verdict=None,
-            find_transcript=find_transcript, timings=timings,
-            error=f"grade agent: {type(e).__name__}: {e}",
-        ))
-    timings["grade"] = grade_elapsed
-    grade_transcript = grade_result.transcript()
+        if find_only:
+            outcomes.append((crash, None, [], None))
+            continue
 
-    if grade_result.error:
-        print(f"[grade:{run_idx}] Agent failed: {grade_result.error}")
-        return _done(RunResult(
-            target=target.name, status="agent_failed",
-            crash=crash, verdict=None,
-            find_transcript=find_transcript, grade_transcript=grade_transcript,
-            timings=timings, error=f"grade agent: {grade_result.error}",
-        ))
-
-    _gline = f"[grade:{run_idx}] done in {grade_elapsed:.1f}s: passed={verdict.passed}, score={verdict.score}"
-    if verdict.disposition not in ("real", "rejected"):
-        _gline += f" → GATED: {verdict.disposition} ({verdict.gate_reason[:120]})"
-    print(color(_gline, "bold") if verdict.passed else _gline)
-
-    status = "crash_found" if verdict.passed else "crash_rejected"
-    result = RunResult(
-        target=target.name, status=status,
-        crash=crash, verdict=verdict,
-        find_transcript=find_transcript, grade_transcript=grade_transcript,
-        timings=timings,
-    )
-    _write_result(out_dir, result)
-
-    # ── Streaming: judge → report dispatch ───────────────────────────────────────
-    # result.json is already on disk — errors here shouldn't clobber it. The
-    # find+grade result is the ground truth; judge→report is downstream polish.
-    if stream_ctx is not None:
+        # ── Grade ──────────────────────────────────────────────────────────
+        print(color(f"[grade:{run_idx}] Starting grader agent in fresh container ...", "grade"))
+        workspace = out_dir / f"grade_workspace{suffix}"
         try:
-            await _stream_dispatch(run_idx, target, model, agent_env, crash,
-                                   status, verdict.score, stream_ctx)
-        except Exception:
+            verdict, grade_result, grade_elapsed = await run_grade(
+                crash, target, model=model, workspace_dir=str(workspace), agent_env=agent_env,
+                container_name=f"{grade_container}{suffix}",
+                transcript_path=str(out_dir / f"grade_transcript{suffix}.jsonl"),
+                progress_prefix=f"[grade:{run_idx}]",
+                system_prompt=system_prompt,
+            )
+        except Exception as e:
             traceback.print_exc()
-            print(f"[judge:{run_idx}] stream dispatch failed — result.json preserved")
+            outcomes.append((crash, None, [], f"grade agent: {type(e).__name__}: {e}"))
+            continue
+        timings[f"grade{suffix}"] = grade_elapsed
+        grade_transcript = grade_result.transcript()
 
-    return result
+        if grade_result.error:
+            print(f"[grade:{run_idx}] Agent failed: {grade_result.error}")
+            outcomes.append((crash, None, grade_transcript, f"grade agent: {grade_result.error}"))
+            continue
+
+        _gline = f"[grade:{run_idx}] done in {grade_elapsed:.1f}s: passed={verdict.passed}, score={verdict.score}"
+        if verdict.disposition not in ("real", "rejected"):
+            _gline += f" → GATED: {verdict.disposition} ({verdict.gate_reason[:120]})"
+        print(color(_gline, "bold") if verdict.passed else _gline)
+        outcomes.append((crash, verdict, grade_transcript, None))
+
+    if not outcomes:
+        # Every candidate died at the dup_check gate.
+        return _done(RunResult(
+            target=target.name, status="agent_failed",
+            crash=None, verdict=None,
+            find_transcript=find_transcript, timings=timings,
+            error="find agent: <dup_check> tag missing — submission(s) rejected",
+        ))
+
+    # ── Write one result file per candidate, in submission order ─────────────
+    written: list[RunResult] = []
+    for j, (crash, verdict, grade_transcript, error) in enumerate(outcomes):
+        suffix = "" if j == 0 else f"_{j + 1}"
+        if error is not None:
+            status = "agent_failed"
+        elif verdict is None:
+            status = "no_crash_found"   # find_only: ungraded → not confirmed
+        else:
+            status = "crash_found" if verdict.passed else "crash_rejected"
+        r = RunResult(
+            target=target.name, status=status,
+            crash=crash, verdict=verdict,
+            find_transcript=find_transcript, grade_transcript=grade_transcript,
+            timings=timings, error=error,
+        )
+        _write_result(out_dir, r, suffix=suffix)
+        written.append(r)
+
+        # ── Streaming: judge → report dispatch ─────────────────────────────
+        # result files are already on disk — errors here shouldn't clobber them.
+        # The find+grade result is the ground truth; judge→report is downstream.
+        if stream_ctx is not None and error is None and verdict is not None:
+            try:
+                await _stream_dispatch(run_idx, target, model, agent_env, crash,
+                                       status, verdict.score, stream_ctx,
+                                       dispatch_key=suffix)
+            except Exception:
+                traceback.print_exc()
+                print(f"[judge:{run_idx}] stream dispatch failed — result{suffix}.json preserved")
+
+    # Headline result: the run as a whole (per-candidate files are on disk).
+    passed = [r for r in written if r.status == "crash_found"]
+    if passed:
+        headline = passed[0]
+    elif all(r.status == "agent_failed" for r in written):
+        headline = written[0]
+    else:
+        headline = RunResult(
+            target=target.name,
+            status="no_crash_found" if find_only else "crash_rejected",
+            crash=written[0].crash, verdict=written[0].verdict,
+            find_transcript=find_transcript,
+            grade_transcript=written[0].grade_transcript,
+            timings=timings,
+        )
+    return headline
 
 
 async def _stream_dispatch(
@@ -434,10 +469,12 @@ async def _stream_dispatch(
     grade_status: str,
     grade_score: float,
     ctx: dict,
+    dispatch_key: str = "",
 ) -> None:
     """Judge → maybe-report. Serialized on ctx["lock"] so two simultaneous
     arrivals don't both claim NEW for the same root cause. Report dispatch
-    happens outside the lock (the slow part)."""
+    happens outside the lock (the slow part). dispatch_key disambiguates
+    judge transcripts/containers when one run yields several candidates (W64)."""
     reports_root: Path = ctx["reports_root"]
     reports_root.mkdir(parents=True, exist_ok=True)
     excerpt = detector_for_output(crash.crash_output).asan_excerpt(crash.crash_output)
@@ -452,8 +489,8 @@ async def _stream_dispatch(
             manifest_entries=manifest,
             model=model, image_tag=target.image_tag, agent_env=agent_env,
             profile=target.profile,
-            container_name=f"judge_{target.name}_{run_idx}",
-            transcript_path=str(reports_root / f"judge_run{run_idx:03d}.jsonl"),
+            container_name=f"judge_{target.name}_{run_idx}{dispatch_key}",
+            transcript_path=str(reports_root / f"judge_run{run_idx:03d}{dispatch_key}.jsonl"),
             progress_prefix=f"[judge:{run_idx}]",
             system_prompt=ctx["system_prompt"],
         )
@@ -462,7 +499,7 @@ async def _stream_dispatch(
         print(color(_jline, "red") if jv.judgment == "NEW" else _jline)
 
         if jv.judgment == "DUP_SKIP":
-            _log_judge(reports_root, run_idx, jv, bug_id=jv.bug_id)
+            _log_judge(reports_root, run_idx, jv, bug_id=jv.bug_id, candidate=dispatch_key)
             return
 
         if jv.judgment == "NEW":
@@ -471,7 +508,7 @@ async def _stream_dispatch(
         else:  # DUP_BETTER
             bug_id = jv.bug_id
             assert bug_id is not None  # _parse_judge enforces
-        _log_judge(reports_root, run_idx, jv, bug_id=bug_id)
+        _log_judge(reports_root, run_idx, jv, bug_id=bug_id, candidate=dispatch_key)
 
     # Lock released — report agent runs without serializing the batch.
     task = asyncio.create_task(_stream_report(
@@ -483,13 +520,17 @@ async def _stream_dispatch(
     ctx["report_tasks"].append(task)
 
 
-def _log_judge(reports_root: Path, run_idx: int, jv, bug_id: int | None) -> None:
+def _log_judge(reports_root: Path, run_idx: int, jv, bug_id: int | None,
+               candidate: str = "") -> None:
     reports_root.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "run_idx": run_idx, "judgment": jv.judgment, "bug_id": bug_id,
+        "reasoning": jv.reasoning,
+    }
+    if candidate:
+        entry["candidate"] = candidate  # W64: which result file of the run
     with open(reports_root / "judge_log.jsonl", "a") as f:
-        f.write(json.dumps({
-            "run_idx": run_idx, "judgment": jv.judgment, "bug_id": bug_id,
-            "reasoning": jv.reasoning,
-        }) + "\n")
+        f.write(json.dumps(entry) + "\n")
 
 
 def _judged_runs(reports_root: Path) -> set[int]:
