@@ -7,3 +7,16 @@
 local absolute path
 85\.10\.20\.30
 _LOCAL_PATH
+
+# --- verified false positives (publication audit 2026-10-05) — OIDs / public DNS /
+#     test fixtures, not real hosts/users/paths/credentials ---
+# X.509 ASN.1 OIDs and an RFC 5280 section ref in the x509-parser target (not IPs):
+#   2.5.29.20 = id-ce-cRLNumber OID; 4.1.2.5 = OID / "RFC 5280 §4.1.2.5"
+\b2\.5\.29\.20\b
+\b4\.1\.2\.5\b
+# Google public DNS literal in the sandbox egress preflight (connectivity probe, not a host):
+socket\.create_connection\(\("8\.8\.8\.8"
+# fuzz-corpus label for the android insecure-storage finding class (a key name, not a secret):
+android:insecure-storage-secret
+# negative test fixture: a planted "BEGIN PRIVATE KEY" marker the scanner must still detect:
+appsflyer\.com/x
