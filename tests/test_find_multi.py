@@ -89,6 +89,23 @@ def test_missing_dup_check_survives_extraction(monkeypatch):
     assert crashes[0].dup_check is None
 
 
+def test_packed_submissions_in_one_message(monkeypatch):
+    """Both kimi models pack several complete submissions into ONE assistant
+    message when told to keep hunting (2026-10-05 campaign). Every packed
+    block must be extracted, not just the first."""
+    _patch_reads(monkeypatch, {"/tmp/a.bin": b"AAA", "/tmp/b.bin": b"BBB", "/tmp/c.bin": b"CCC"})
+    packed = "\n\n".join([
+        _submission("/tmp/a.bin", crash_type="heap-buffer-overflow"),
+        _submission("/tmp/b.bin", crash_type="stack-buffer-overflow"),
+        _submission("/tmp/c.bin", crash_type="use-after-free"),
+    ])
+    r = AgentResult(messages=[_msg(packed)])
+    crashes = find_mod.extract_crashes(r, container="c")
+    assert [c.poc_path for c in crashes] == ["/tmp/a.bin", "/tmp/b.bin", "/tmp/c.bin"]
+    assert crashes[2].crash_type == "use-after-free"
+    assert crashes[1].dup_check is not None
+
+
 def test_no_submissions_returns_empty(monkeypatch):
     _patch_reads(monkeypatch, {})
     r = AgentResult(messages=[_msg("found nothing solid")])
