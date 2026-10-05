@@ -32,7 +32,7 @@ recursion (opt-in); T1 memory near-refuted; T3 non-entity resource exhaustion.
 - **Live on master** (checked raw.githubusercontent tafia/quick-xml/master/src/name.rs — still
   `+= 1` / `saturating_sub`). Survives the L15/L16 already-fixed check.
 
-### PoC (Tamm, fuzz image; `poc/src/main.rs` + `poc/src/bin/misres.rs`)
+### PoC (the runner, fuzz image; `poc/src/main.rs` + `poc/src/bin/misres.rs`)
 - **overflow-checks ON** (debug builds; hardened/security release profiles that opt in): 70000-deep doc
   (490 KB) → `panicked at name.rs:709:9: attempt to add with overflow` → **DoS**.
 - **overflow-checks OFF** (default `cargo build --release`): no panic, but the u16 wraps 65535→0 and the

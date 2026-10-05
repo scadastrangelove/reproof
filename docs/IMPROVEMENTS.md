@@ -96,3 +96,22 @@ tested.
   with positive/negative controls green; verdict scope honestly `component`. Reuse note: the probe
   shape (stdin spec -> drive real module -> stdout observation JSON) ports to any JS/TS agent CLI;
   the `#/`-import + decorator gotchas are documented in the Dockerfile comment.
+- **W64 [SHIPPED 2026-10-05] — multi-candidate find loop** `[pipeline]`. The find loop returned only the
+  last submitted candidate per run; a find-agent that submits and stops capped recall at 1/run (the
+  first kimi-code three-lens batch yielded 3 candidates at 3-4% of the turn budget, vs 19 in a
+  parallel same-target campaign). `run_find` now extracts every complete `<poc_path>` submission
+  (last tag block per path wins), `_run_once` grades each candidate in its own container and writes
+  per-candidate result files (`result.json`, `result_2.json`, ...); dedup/aggregate read `result*.json`;
+  the dup_check gate drops only the offending candidate; judge dispatch is per-candidate. Recall
+  numbers: pending the 3-lens × 2-model kimi-code campaign (2026-10-05).
+- **W65 [SHIPPED 2026-10-05] — guard inventory before claims** `[prompts]`. Candidates clustered on the
+  first hypothesis instead of systematically uncovered guard residue. The find prompt now makes a guard
+  inventory load-bearing (auto-approve policies incl. non-interactive defaults, trust gates, denylists,
+  egress, config→hot-reload — coverage AND uncovered residue per guard), and scan-extras gains AI10.
+  Effectiveness: measured by the same campaign's class coverage vs the parallel campaign's K1/K3/K7.
+- **W66 — profile-aware vocabulary in user-facing output** `[ux]`. The pipeline's lingua franca is
+  memory-corruption (`Crash claimed`, `crash_found`, `found_bugs.jsonl`); for the ai-agent profile the
+  artifact is a scenario candidate, not a crash — the log lines mislead. Keep the internal contract
+  names (load-bearing: resume, aggregate, status enums) but print profile-aware lines
+  ("Candidate claimed", "No candidate emitted"). **Done-when:** an ai-agent run's stdout contains no
+  "crash" outside detector excerpts.

@@ -1,4 +1,4 @@
-# Campaign benchmark — 2026-10-02 (Tamm, kimi-for-coding)
+# Campaign benchmark — 2026-10-02 (the runner, kimi-for-coding)
 
 Three real campaign targets, each pinned pre-fix, each run through the three
 variant-scan lenses (blind / threat-model / CVE-seeded), 3 parallel find runs
@@ -29,7 +29,7 @@ upstream fix commit before the PoC (target image ships full `.git`; see
 h2/rustls, same XOR key-less recovery on rustdesk. Time-to-find: rustdesk
 105–441 s, rustls 455–1692 s, h2 671–6583 s.
 
-Results dirs (Tamm `~/reproof/results/<target>/`):
+Results dirs (the runner `~/reproof/results/<target>/`):
 - h2: blind `20261002T065629Z`, TM `20261002T105644Z`, CVE `20261002T114353Z`
 - rustls: blind `20261002T073444Z`, TM `20261002T102407Z`, CVE `20261002T123719Z`
 - rustdesk: blind `20261002T074039Z`, TM `20261002T104311Z`, CVE `20261002T123719Z`

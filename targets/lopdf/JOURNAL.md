@@ -319,7 +319,7 @@ untested surface for a future pass.
 
 ## Soak enumeration (2026-07-18, full 6h soaks, production profile overflow-checks=off)
 
-Two fork-mode soaks on Tamm (`run_fuzz_soak.sh`, `-ignore_crashes=1` fork=N), corpus carried.
+Two fork-mode soaks on the runner (`run_fuzz_soak.sh`, `-ignore_crashes=1` fork=N), corpus carried.
 Checked mid-run by reproducing in-container artifacts (libFuzzer copies to /out only at SOAK-DONE;
 the live crash inputs live inside the container at `fuzz/artifacts/<tgt>/`).
 

@@ -89,3 +89,14 @@ Cross-model hostile review (finding found by one model, refuted by the other):
   proto+server+client change), described not diffed. No `cargo` build run — apply-check + code-read
   only; full workspace build is the maintainer-side gate. Pin left pristine (submodule reverted).
 - STATUS: package + patches complete, ready for the operator to send. Nothing filed/pushed (private).
+
+## 2026-10-05 — upstream fixed both Highs (post-fix verification)
+- **nonce-reuse FIXED upstream**: KX v1 (`Encrypt::new_split`, per-direction subkeys over the
+  handshake transcript + version negotiation) merged as hbb_common PR #614 (2026-09-23,
+  `e272fede`) — the negotiated-capability flag-day shape proposed in our patch 04. KX v0 peers
+  remain exposed until both ends upgrade.
+- **SB1 FIXED upstream**: CVE-2026-73102 (macOS clipboard file-paste traversal), commit
+  `6f1eb16`, public 2026-08-26.
+- Readiness note (repo publication): both Highs remediated and public → describing them here
+  is no longer uncoordinated disclosure. This file previously said "Nothing filed" — the
+  campaign's disclosure package predates the upstream fixes.

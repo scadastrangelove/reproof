@@ -1,7 +1,7 @@
 # Deploying on a Linux host
 
 The pipeline's live path needs Linux + Docker (gVisor is Linux-only). This
-is the runbook used for the first live deployment (host `Tamm`, Ubuntu
+is the runbook used for the first live deployment (host `the runner`, Ubuntu
 24.04, 12c/62G, Docker 29) — the canary run found 3/3 planted bugs
 end-to-end on the Kimi backend.
 

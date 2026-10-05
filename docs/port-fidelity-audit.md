@@ -3,7 +3,7 @@
 Question asked: was the Reproof port of the original vuln-pipeline harness
 ported *honestly*, or "fitted to the answer"? Method: full file-by-file diff
 of `harness/` (rust-in-peace) vs `reproof/reproof/`, plus empirical checks on
-the 2026-10-02 campaign-benchmark transcripts on Tamm.
+the 2026-10-02 campaign-benchmark transcripts on the runner.
 
 ## Verdict A — the pipeline itself was ported faithfully
 

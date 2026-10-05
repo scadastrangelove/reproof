@@ -54,7 +54,7 @@ planted — a clean end-to-end reproduction of DVRA-003, confirmed dynamically.
 ## Parity record — Kimi Code CLI backend (reproof, 2026-10-01)
 
 Same target, same commands, Kimi Code CLI 2.1.1 (`kimi-for-coding`) behind the
-gVisor sandbox + egress proxy (host `Tamm`, results dir
+gVisor sandbox + egress proxy (host `the runner`, results dir
 `results/dvra3-parser/20261001T215518Z/`):
 
 | stage | Claude baseline | Kimi backend |

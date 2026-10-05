@@ -1,6 +1,6 @@
 # actix-http HTTP/1 smuggling — campaign journal
 
-## Stage 1 — differential harness built + run (2026-07-23, Tamm)
+## Stage 1 — differential harness built + run (2026-07-23, the runner)
 Harness (`poc/` mirror in scratchpad `actix-harness/`): external bin depending on `actix-http`
 @ pin `eee23e2`, drives the REAL public `h1::Codec` (`tokio_util::codec::Decoder`, run inside a
 tokio `LocalSet` because `ServiceConfig::default()` spawns a date task) over crafted byte streams;
@@ -71,7 +71,7 @@ Blind pass caught the highest-severity item (CPU DoS, orthogonal to the smugglin
 TM/CVE passes caught the on-class chunked divergence — validates running all three lenses. Next:
 dynamic PoC for #1 (dispatcher busy-loop repro) and #2 (chunked terminator via the existing harness).
 
-## Stage 4a — finding #2 (chunked terminator) DYNAMICALLY CONFIRMED (2026-07-23, Tamm harness)
+## Stage 4a — finding #2 (chunked terminator) DYNAMICALLY CONFIRMED (2026-07-23, the runner harness)
 Extended the differential harness with terminator cases (harness-chunked-divergence.txt). actix's
 `ChunkedState::read_size` accepts THREE non-RFC chunk-size lines as the terminating zero-chunk (RFC
 7230/9112 require chunk-size = 1*HEXDIG), ending the body early and re-decoding the trailing bytes
@@ -86,7 +86,7 @@ same bytes but rejects/re-frames these size lines (the 2021-0081 posture). Real 
 disclosure worth considering but low-SNR — check actix SECURITY.md scope before filing (image-rs
 pushback lesson). Root cause: `read_size` has no "hex-digit-seen" invariant (chunked.rs:54-70).
 
-## Stage 4b — finding #1 (dispatcher busy-loop) DYNAMICALLY CONFIRMED (2026-07-23, Tamm)
+## Stage 4b — finding #1 (dispatcher busy-loop) DYNAMICALLY CONFIRMED (2026-07-23, the runner)
 In-tree test appended to actix-http/src/h1/dispatcher_tests.rs (poc-busyloop-test.rs): drives the
 REAL h1::Dispatcher via HttpFlow + TestBuffer preloaded with ~420KB of pipelined bodyless GETs and
 an always-Pending service; counting Waker measures self-wakes. Result (harness-busyloop-result.txt):
@@ -108,7 +108,7 @@ Two dynamically-confirmed findings on current actix-http main (eee23e2):
 Both real. Disclosure pending: check actix SECURITY.md scope first (image-rs low-SNR/DoS lesson),
 then decide bundle vs #1-only. Do NOT file without explicit user go (outward-facing).
 
-## Stage 5 — ntex fork comparison (L40 payoff, 2026-07-23, Tamm harness)
+## Stage 5 — ntex fork comparison (L40 payoff, 2026-07-23, the runner harness)
 Built the SAME differential harness against ntex 3.11.0 (pin 9b1e464) via its public
 `ntex::http::h1::Codec`. ntex LACKS actix's post-length validation block. Results
 (harness-ntex-fork-results.txt) — controls hold (valid chunked ok, double-CL rejected):
@@ -154,7 +154,7 @@ discipline); two of the four distinct root causes needed dynamic PoC to actually
 
 **No fuzzing needed** — for both priority findings the mechanism was precise enough (from source
 analysis) to construct a deterministic byte-level PoC directly; fuzzing would add discovery value
-we didn't need here, not confirmation value. Harness: ntex/poc-panic-and-consumed.rs, run on Tamm
+we didn't need here, not confirmation value. Harness: ntex/poc-panic-and-consumed.rs, run on the runner
 against the real public `ntex::http::h1::Codec`. Full output: ntex/harness-poc-results.txt.
 
 ### Panic via non-char-boundary slice (decoder.rs:526) — DYNAMICALLY REFUTED

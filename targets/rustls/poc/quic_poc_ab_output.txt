@@ -3,7 +3,7 @@
   server constructed OK (mixed provider passed the 'any' QUIC-capability gate)
   crafted ClientHello: 178 bytes, cipher_suites=[TLS13_CHACHA20_POLY1305_SHA256 (quic:None)]
 
-thread 'main' panicked at ~/.cargo/git/checkouts/rustls-47f8389eeaf7e3eb/bd9f7f5/rustls/src/tls13/key_schedule.rs:354:36:
+thread 'main' panicked at <cargo-git-checkout>/rustls/src/tls13/key_schedule.rs:354:36:
 called `Option::unwrap()` on a `None` value
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
   >>> PANIC CONFIRMED: called `Option::unwrap()` on a `None` value

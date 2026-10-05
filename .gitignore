@@ -6,6 +6,9 @@ __pycache__/
 results/
 .DS_Store
 
+# Rust build outputs (targets/*/poc/**/target/ and any other) — never commit
+target/
+
 # Real-world ai-agent targets: pinned source checkouts, lab fixtures (victim
 # repos, payload recipes) and finding-linked material — never commit.
 # Synthetic targets that ship with the repo (targets/ai-agent-canary/) and the

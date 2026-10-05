@@ -85,7 +85,7 @@ H3 API-misuse shapes, H4 compound leniency), clean run (16/16 agents, 0 errors) 
 (one a re-discovery of the same area as the CVE run's finding, one a fuzz-coverage meta-observation),
 6 contested, 7 refuted.
 
-### Empirical verification (Tamm, direct `httparse` calls — did NOT trust either panel's self-reported
+### Empirical verification (the runner, direct `httparse` calls — did NOT trust either panel's self-reported
 "I compiled and verified this" claims; reproduced independently, P1)
 
 **Bug #1 — silent header-section truncation on a whitespace-only first line — SURVIVES, real, novel.**

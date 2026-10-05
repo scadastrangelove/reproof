@@ -10,14 +10,17 @@ and attacked once more after patching.
 The name is the method: **repro**duction + **proof**. A secondary reading is
 intentional — the pipeline issues *reproofs* to unproven agent claims.
 
-- Multi-language from day one (Rust, C/C++, kernel, mobile profiles) — not a
-  Rust-only tool.
-- Model-backend-pluggable; the first backend is
+- Multi-language from day one (Rust, C/C++, kernel, mobile, ai-agent profiles) —
+  not a Rust-only tool.
+- Model-backend-pluggable; the reference backend is
   [Kimi Code CLI](https://github.com/MoonshotAI/kimi-code) (`kimi -p
   --output-format stream-json`).
-- Descended from
-  [rust-in-peace](https://github.com/scadastrangelove/rust-in-peace) and,
-  upstream of it, Anthropic's
+- **Reproof is the Kimi port of
+  [rust-in-peace](https://github.com/scadastrangelove/rust-in-peace)**: the same
+  find → grade → judge → reattack pipeline discipline, ported from the
+  Claude/Codex agent runtime to the Kimi Code CLI, with the interactive skills
+  auto-discovered from `.agents/skills/`. rust-in-peace itself builds on
+  Anthropic's
   [defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness).
 
 ## Using this repo
@@ -42,12 +45,25 @@ parallel agents).
 
 ## Status
 
-Phase 1 complete: the full pipeline core (find / grade / judge / report /
-recon / patch / predisclose / reattack) runs on the Kimi Code CLI backend
-(`reproof/agent_kimi.py`), with the upstream test suite green against the
-port (392 passed, 4 skipped). Phase 2 adds the sandbox entrypoint
-(`bin/reproof-sandboxed`, `scripts/setup_sandbox.sh`); an end-to-end live run
-requires a Linux host with Docker (gVisor is Linux-only).
+The original port roadmap (phases 0–4) is complete, including live runs on a
+Linux runner and **DVRA-3 benchmark parity** with the Claude baseline (2/3 find,
+gold-seed PoC, 10/10 MEDIUM, reattack reproduced, scorecard exit 0 —
+`targets/dvra3-parser/README.md`). Since then:
+
+- **ai-agent profile** shipped: contracts/evidence/runtime package, reusable
+  lab-adapter pack (mock LLM, MCP stdio/HTTP, ACP, PTY), `internal-lan` runtime
+  mode, first wired end-to-end runs (471 tests green) — see
+  `docs/extending-ai-agents.md`.
+- **3-lens campaign benchmarks** (blind / threat-model / cve-seeded) ran against
+  real targets — h2, rustls, rustdesk (hbb_common), x509-parser and more; the
+  campaign findings are all fixed upstream (`targets/*/README.md` carry the
+  remediation status).
+- **Port-fidelity audit** against the upstream harness:
+  `docs/port-fidelity-audit.md` (pipeline verbatim, prompts untouched; the two
+  contamination bugs it found — `.git` history in target images and the
+  reattack-template leak — are fixed with regression tests).
+- Work backlog: `docs/IMPROVEMENTS.md` (W49–W65 shipped, incl. the
+  multi-candidate find loop and guard-inventory prompt discipline).
 
 ## Running (Linux host)
 
@@ -64,9 +80,11 @@ bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel 
 |---|---|---|
 | 0 | Verify Kimi headless contract | resume / stream-json / system-prompt / tool-restriction / max-turns behavior measured and recorded in ADR-001 ✅ |
 | 1 | Agent adapter + harness port | all stages ported; upstream test parity (392 passed) ✅ |
-| 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress ✅ (code-complete; live run pending a Linux host) |
+| 2 | Sandbox entrypoint | `bin/reproof-sandboxed` + setup script; live canary run on a Linux host under gVisor with Kimi-only egress ✅ |
 | 3 | Skills port | all 10 skills auto-discovered from `.agents/skills/` by the Kimi CLI; docs ported; quickstart verified live ✅ |
 | 4 | Benchmark parity | ✅ DVRA-3 on Kimi == Claude baseline: 2/3 find, gold-seed PoC, 10/10 MEDIUM, reattack reproduced, scorecard exit 0 (`targets/dvra3-parser/README.md`) |
+| 5 | AI-agent profile | contracts/evidence/runtime + lab-adapter pack; wired e2e + tool-level mechanism replay 3/3 (W63); 471 tests ✅ |
+| 6 | Recall engineering | W64 multi-candidate find loop shipped (per-candidate grading/dedup/judge); W65 guard-inventory prompt discipline; effectiveness measured by the 3-lens × 2-model kimi-code campaign — pending |
 
 ## License and attribution
 

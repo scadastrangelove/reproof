@@ -2,7 +2,7 @@
 # Ready-to-fire: open the ASN1Time::add PR — run ONLY if the maintainer greenlights a PR.
 # The commit is already made locally on branch fix/asn1time-add-checked-add.
 set -euo pipefail
-PRDIR=~/Documents/x509-parser-pr
+PRDIR="${PRDIR:-$HOME/Documents/x509-parser-pr}"
 cd "$PRDIR"
 # 1) fork rusticata/x509-parser under the authed gh account (scadastrangelove) if not already
 gh repo fork rusticata/x509-parser --remote=false --clone=false || true

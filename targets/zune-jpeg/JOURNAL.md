@@ -2,7 +2,7 @@
 
 Target: `zune-jpeg` 0.5.15 (crates.io tarball; repo etemesi254/zune-image), `profile: rust`.
 A JPEG decoder with **real unsafe SIMD** (AVX2/NEON IDCT, upsampler, color-convert, `unsafe_utils`)
-+ unchecked `usize` dimension math — a memory-safety surface, not just panic-DoS. Run on Tamm within
++ unchecked `usize` dimension math — a memory-safety surface, not just panic-DoS. Run on the runner within
 a **1h CPU-clock cap** on the fuzz soak; static find done as a union-of-N Workflow off-box.
 
 ## Stages
