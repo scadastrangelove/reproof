@@ -184,3 +184,20 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
   were recoverable because Write tool-call contents persist in transcripts — a second
   argument for fsync'd transcripts. When a count looks suspiciously low, diff the number of
   `<poc_path>` openers in the transcript against parsed artifacts before blaming the model.
+
+## L74 — A shared prompt checkpoint beat a dedicated focus lens `[PROVEN]` · method
+
+- **What happened:** W67 shipped two mechanisms for the same gap: a config-lifecycle
+  checkpoint in the shared find prompt (all lenses) and a dedicated config-lifecycle
+  focus lens. In the validation campaign the config-trust classes (permission rules
+  never loaded; local.toml boundary extension) came from the BLIND lens — via the
+  checkpoint — while both models' dedicated-lens runs produced only the classes the
+  earlier campaign already had.
+- **Why:** a focus seed constrains WHERE to look but the model still free-styles HOW;
+  a checkpoint constrains the PROCESS (enumerate five lifecycle stages per artifact
+  before claiming), which forces the walk regardless of focus. Possibly the example-
+  heavy lens text also anchored the dedicated runs on the named artifacts.
+- **Change:** prefer process checkpoints in the shared prompt over additional focus
+  lenses when the gap is "a surface type nobody walks". Also: a checkpoint that NAMES
+  the defect shapes validates guided recall, not discovery — read done-when results
+  accordingly and keep a blind pass without the seed when measuring true recall.

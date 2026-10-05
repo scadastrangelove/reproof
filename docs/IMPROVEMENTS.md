@@ -121,9 +121,11 @@ tested.
   names (load-bearing: resume, aggregate, status enums) but print profile-aware lines
   ("Candidate claimed", "No candidate emitted"). **Done-when:** an ai-agent run's stdout contains no
   "crash" outside detector excerpts.
-- **W67 — config-lifecycle surfaces under-weighted by finders** `[prompts]`. The two-model campaign
-  covered permission-policy guard gaps but missed all three config-trust classes the parallel campaign
-  found (config write→hot-reload→exec, permission-rules loading, instruction-file trust) despite AI10
-  naming them. Add a config-lifecycle focus lens or an inventory checkpoint requiring one line per
-  lifecycle stage (write → validate → reload → execute) before candidates. **Done-when:** a three-lens
-  kimi-code batch surfaces ≥1 config-lifecycle candidate.
+- **W67 [SHIPPED 2026-10-05] — config-lifecycle surfaces under-weighted by finders** `[prompts]`. The
+  two-model campaign covered permission-policy guard gaps but missed all three config-trust classes the
+  parallel campaign found, despite AI10 naming them. Shipped as BOTH mechanisms: a lifecycle checkpoint
+  in the find prompt (per-artifact write → validate → load → reload → execute table with the gate at
+  each stage) + AI11 in scan-extras + a 4th config-lifecycle focus lens. **Validated:** the 4-lens ×
+  2-model rerun surfaced permission-deny-fail-open (config rules parsed but never loaded — confirmed
+  by code: zero addRules callers) and a local.toml boundary-extension candidate — from the BLIND lens,
+  driven by the checkpoint, while the dedicated lens added nothing new (L74).
