@@ -82,6 +82,18 @@ residue. A denylist is only as strong as its unlisted categories; an approval
 gate is only as strong as its auto-approve exceptions; a trust gate is only
 as strong as the paths that load without consulting it.
 
+AI11 — Config lifecycle between the stages (W67)
+Walk every config/instruction artifact through write → validate → load →
+reload → execute, one line per stage: component, identity, and the gate that
+consults trust or approval at that stage. Defects live BETWEEN stages — a
+guard-approved write whose later reload executes without a re-check; a rules
+section that is parsed but never loaded into the enforcement engine; an
+artifact consumed with no trust consultation while sibling artifacts are
+gated; a one-time trust decision silently inherited by later additions;
+an enabled-by-default install with no integrity check. "No gate at this
+stage" is a lead, not a blank cell; verify which identity executes the
+final stage before claiming.
+
 Finding record
 Record component, security invariant and policy source; attacker capabilities;
 entry -> guards -> effect; dependencies and configuration; separate triggers;

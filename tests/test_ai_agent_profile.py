@@ -132,6 +132,17 @@ def test_find_prompt_carries_contract_catalog():
     assert P.get_profile("rust").find_context is None
 
 
+def test_find_prompt_carries_config_lifecycle_checkpoint():
+    """W67: the find prompt must force a per-stage config/instruction lifecycle
+    walk (write → validate → load → reload → execute) — guard-module inventory
+    alone left the config-trust classes unreached in the two-model campaign."""
+    pr = P.get_profile("ai-agent")
+    p = pr.build_find_prompt(github_url="u", commit="c", source_root="s", binary_path="b")
+    assert "CONFIG LIFECYCLE CHECKPOINT" in p
+    for stage in ("write", "validate", "load", "reload", "execute"):
+        assert stage in p
+
+
 def test_find_prompt_patched_framing():
     pr = P.get_profile("ai-agent")
     p = pr.build_find_prompt(github_url="u", commit="c", source_root="s", binary_path="b",
