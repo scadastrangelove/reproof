@@ -168,3 +168,19 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 - **Change:** when a finding's violation lives in tool-execution code, prefer a tool-level mechanism
   replay (fixture workspace + direct executor calls) over waiting for an agent_behavior adapter.
   Contract entries should name the tool executor, not only the user-facing CLI. W63.
+
+## L73 — Agents pack multiple submissions into ONE message; parse per-block, never per-message `[PROVEN]` · pipeline
+
+- **What happened:** W64 taught the find loop to accept several candidates per run. Both kimi
+  models then packed 2–3 complete `<poc_path>` submissions into a single assistant message
+  (one message at the end of the hunt). The extractor ran `re.search` per message and kept
+  only the first block — silently dropping 6 of 14 candidates (43%) in the two-model
+  kimi-code campaign, including the entire symlink-escape class from three runs.
+- **Why:** "one message = one submission" felt like a safe structural assumption — it holds
+  when agents submit incrementally, but "submit each, keep hunting" also reads as "collect,
+  then dump". Models choose. Any tag-protocol parser must assume N blocks per message.
+- **Change:** `extract_crashes` splits every assistant message at each `<poc_path>` opener
+  and parses segments independently (0405330, pinned by test_find_multi). Lost candidates
+  were recoverable because Write tool-call contents persist in transcripts — a second
+  argument for fsync'd transcripts. When a count looks suspiciously low, diff the number of
+  `<poc_path>` openers in the transcript against parsed artifacts before blaming the model.
