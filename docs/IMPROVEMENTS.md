@@ -103,15 +103,27 @@ tested.
   (last tag block per path wins), `_run_once` grades each candidate in its own container and writes
   per-candidate result files (`result.json`, `result_2.json`, ...); dedup/aggregate read `result*.json`;
   the dup_check gate drops only the offending candidate; judge dispatch is per-candidate. Recall
-  numbers: pending the 3-lens × 2-model kimi-code campaign (2026-10-05).
+  numbers (3-lens × 2-model kimi-code campaign, 2026-10-05): 2.33 candidates/run vs the 1.0 ceiling;
+  3 unique classes vs 2 in the single-model batch. Follow-up fix same day (0405330): both models pack
+  several submissions into ONE assistant message — extraction now splits per block; without it 6/14
+  candidates (43%) were dropped pipeline-side and recovered post-hoc from transcripts.
 - **W65 [SHIPPED 2026-10-05] — guard inventory before claims** `[prompts]`. Candidates clustered on the
   first hypothesis instead of systematically uncovered guard residue. The find prompt now makes a guard
   inventory load-bearing (auto-approve policies incl. non-interactive defaults, trust gates, denylists,
   egress, config→hot-reload — coverage AND uncovered residue per guard), and scan-extras gains AI10.
-  Effectiveness: measured by the same campaign's class coverage vs the parallel campaign's K1/K3/K7.
+  Effectiveness (same campaign): finders opened with a real permission-policy inventory and covered
+  secret-containment + confinement classes (K1/K2 analogs), but never walked the config lifecycle —
+  K3/K4/K7 (config write→hot-reload, rules loading, instruction trust) stayed unreached. Inventory
+  happened, lifecycle surfaces were under-weighted → W67.
 - **W66 — profile-aware vocabulary in user-facing output** `[ux]`. The pipeline's lingua franca is
   memory-corruption (`Crash claimed`, `crash_found`, `found_bugs.jsonl`); for the ai-agent profile the
   artifact is a scenario candidate, not a crash — the log lines mislead. Keep the internal contract
   names (load-bearing: resume, aggregate, status enums) but print profile-aware lines
   ("Candidate claimed", "No candidate emitted"). **Done-when:** an ai-agent run's stdout contains no
   "crash" outside detector excerpts.
+- **W67 — config-lifecycle surfaces under-weighted by finders** `[prompts]`. The two-model campaign
+  covered permission-policy guard gaps but missed all three config-trust classes the parallel campaign
+  found (config write→hot-reload→exec, permission-rules loading, instruction-file trust) despite AI10
+  naming them. Add a config-lifecycle focus lens or an inventory checkpoint requiring one line per
+  lifecycle stage (write → validate → reload → execute) before candidates. **Done-when:** a three-lens
+  kimi-code batch surfaces ≥1 config-lifecycle candidate.
