@@ -87,3 +87,8 @@ tested.
   strings drifted against reality twice this wave (verifier-only vs grade-leg-proven). Generate the status
   line from artifact presence (e.g. a pipeline-confirmed evidence file flips the claim). **Done-when:**
   the status line regenerates from the results tree and goes stale-red when artifacts are missing.
+- **W63 — tool-level mechanism replay for agent-CLI targets** `[pipeline]`. Findings whose violation
+  lives in tool executors (path checks, permission chain, arg parsing) can be confirmed without a
+  model: a node/python runner that calls the target's tool entrypoints in a fixture workspace, wired
+  as a runtime adapter under `mode: mechanism`. **Done-when:** an adapter replays a path-confusion
+  scenario end-to-end (positive + negative controls) against a fixture repo, no model involved.

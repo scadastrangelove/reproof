@@ -153,3 +153,18 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
   format and tag syntax; victim labs floor pids-limit at 256 under a sandbox runtime. All five fixes
   ship with regression tests. W59 shipped; follow-ups W61 (judge dedup on root cause, not component
   string) and W62 (report prompt: replay is orchestrator-side).
+
+## L72 — Agent-CLI findings decompose to tool-level mechanism checks; a model is not always needed `[PROVEN]` · method
+
+- **Evidence:** the first real-target three-lens run (a coding-agent CLI, --find-only) produced three
+  candidates; triage confirmed two tracks statically, and BOTH are dynamically confirmable by driving
+  the tool executors directly in a fixture workspace (path-confusion write, guard-presence check) —
+  no live model, no agent_behavior adapter. The finders also self-separated intended behavior from
+  bugs: one candidate was merged as documented design after the doc lines were checked, zero false
+  code claims survived triage.
+- **Why:** an agent system's authority boundaries live in deterministic code (path canonicalization,
+  policy-chain ordering, tool argument handling). The model is the *steering* uncertainty, but the
+  *guard* either holds for all inputs or it doesn't — and that question is mechanism, not behavior.
+- **Change:** when a finding's violation lives in tool-execution code, prefer a tool-level mechanism
+  replay (fixture workspace + direct executor calls) over waiting for an agent_behavior adapter.
+  Contract entries should name the tool executor, not only the user-facing CLI. W63.
