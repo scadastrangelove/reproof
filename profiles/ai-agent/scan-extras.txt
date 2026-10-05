@@ -70,6 +70,18 @@ the weaker path. The signal is the mismatch between gate strength and field
 breadth across siblings, not any single dangerous shape; verify field-level
 sensitivity before recording a candidate.
 
+AI10 — Guard inventory before claims (W65)
+Enumerate the guard surfaces before deep-diving: auto-approve and permission
+policies (including non-interactive defaults), trust gates (workspace trust,
+MCP server trust, instruction-file loading such as AGENTS.md), sensitive-file
+and secret denylists, egress controls, and config-write → hot-reload paths.
+For each guard record coverage AND the uncovered residue: bypass conditions,
+unlisted categories, default-on behavior, approval inherited from a sibling
+rule, enforcement that exists in one mode but not another. Then hunt in the
+residue. A denylist is only as strong as its unlisted categories; an approval
+gate is only as strong as its auto-approve exceptions; a trust gate is only
+as strong as the paths that load without consulting it.
+
 Finding record
 Record component, security invariant and policy source; attacker capabilities;
 entry -> guards -> effect; dependencies and configuration; separate triggers;
