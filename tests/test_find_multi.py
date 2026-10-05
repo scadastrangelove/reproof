@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """W64 multi-candidate extraction: one find run may submit several candidates.
 

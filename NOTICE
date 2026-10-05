@@ -1,0 +1,18 @@
+reproof
+Copyright 2026 Sergey Gordeychik
+
+reproof is the Kimi Code CLI port of rust-in-peace
+(https://github.com/scadastrangelove/rust-in-peace), Copyright 2026 Sergey
+Gordeychik. The reproof-original code — the Kimi Code CLI backend, the
+output-hygiene linter, and the reproof-specific tests and tooling — is
+Copyright 2026 Sergey Gordeychik.
+
+Portions of this software are derived from Anthropic's
+defending-code-reference-harness
+(https://github.com/anthropics/defending-code-reference-harness),
+Copyright Anthropic PBC, licensed under the Apache License, Version 2.0.
+Those files retain their original copyright and license notices.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this software except in compliance with the License. A copy of the
+License is in the LICENSE file.

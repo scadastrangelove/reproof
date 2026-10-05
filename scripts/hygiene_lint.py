@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Fail-closed hygiene linter for the output path (L69/W55).
 

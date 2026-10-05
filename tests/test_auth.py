@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Tests for reproof.auth — env resolution and egress derivation."""
 from __future__ import annotations

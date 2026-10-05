@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Adapter contract tests, driven by Phase-0 live captures (ADR-001).
 

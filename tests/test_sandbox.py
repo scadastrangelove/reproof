@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Tests for reproof.sandbox + reproof.agent_image (no docker daemon needed)."""
 from __future__ import annotations

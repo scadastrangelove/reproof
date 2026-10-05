@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Tests for scripts/hygiene_lint.py — the fail-closed output-path gate (L69/W55)."""
 from __future__ import annotations

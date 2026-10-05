@@ -88,5 +88,11 @@ bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel 
 
 ## License and attribution
 
-Apache-2.0. Upstream copyright (Anthropic PBC) and the rust-in-peace lineage
-are retained where code is carried over.
+[Apache-2.0](LICENSE). The reproof port and its original code — the Kimi Code
+CLI backend, the output-hygiene linter, and the reproof-specific tests and
+tooling — are **Copyright 2026 Sergey Gordeychik**. Code carried over from
+[rust-in-peace](https://github.com/scadastrangelove/rust-in-peace) and its
+upstream, Anthropic's
+[defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness)
+(Copyright Anthropic PBC), retains its original copyright and Apache-2.0
+notices. See [NOTICE](NOTICE).

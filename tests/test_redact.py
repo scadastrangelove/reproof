@@ -1,3 +1,4 @@
+# Copyright 2026 Sergey Gordeychik
 # SPDX-License-Identifier: Apache-2.0
 """Tests for reproof.redact — live credential scrubbing."""
 from __future__ import annotations
