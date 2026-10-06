@@ -14,7 +14,10 @@ intentional — the pipeline issues *reproofs* to unproven agent claims.
   not a Rust-only tool.
 - Model-backend-pluggable; the reference backend is
   [Kimi Code CLI](https://github.com/MoonshotAI/kimi-code) (`kimi -p
-  --output-format stream-json`).
+  --output-format stream-json`), with a second shipped backend for
+  **ZCode / GLM** (`REPROOF_AGENT_BACKEND=zcode`) driving the ZCode CLI's
+  app-server protocol through a node shim — same stages, same contract
+  (`docs/adr/ADR-002-agent-backend-zcode.md`).
 - **Reproof is the Kimi port of
   [rust-in-peace](https://github.com/scadastrangelove/rust-in-peace)**: the same
   find → grade → judge → reattack pipeline discipline, ported from the
@@ -62,6 +65,12 @@ gold-seed PoC, 10/10 MEDIUM, reattack reproduced, scorecard exit 0 —
   `docs/port-fidelity-audit.md` (pipeline verbatim, prompts untouched; the two
   contamination bugs it found — `.git` history in target images and the
   reattack-template leak — are fixed with regression tests).
+- **ZCode (GLM) backend** shipped: `REPROOF_AGENT_BACKEND=zcode` runs the full
+  find → grade → judge → report → aggregate stream with a real GLM coding-plan
+  key, validated under gVisor (ADR-002, measured contract R1–R9: model
+  selection, bidirectional frames, custom-provider overlay, HOME isolation,
+  `workspaceId`-is-a-path, proxy/CA handling). Auth stays env-only
+  (`ZCODE_MODEL_*`); tools stay unrestricted inside the container boundary.
 - Work backlog: `docs/IMPROVEMENTS.md` (W49–W65 shipped, incl. the
   multi-candidate find loop and guard-inventory prompt discipline).
 
@@ -72,6 +81,15 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 export KIMI_MODEL_NAME=... KIMI_MODEL_API_KEY=... KIMI_MODEL_BASE_URL=https://...
 scripts/setup_sandbox.sh                      # one-time: runsc, egress proxy, images
 bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel --stream
+```
+
+ZCode (GLM) backend instead of Kimi — same pipeline, one switch plus its own
+env trio:
+
+```bash
+export REPROOF_AGENT_BACKEND=zcode
+export ZCODE_MODEL_NAME=... ZCODE_MODEL_API_KEY=... ZCODE_MODEL_BASE_URL=https://api.z.ai/api/anthropic
+bin/reproof-sandboxed run rust-canary --model "$ZCODE_MODEL_NAME" --runs 3 --parallel --stream
 ```
 
 ## Roadmap
@@ -85,6 +103,7 @@ bin/reproof-sandboxed run canary --model "$KIMI_MODEL_NAME" --runs 3 --parallel 
 | 4 | Benchmark parity | ✅ DVRA-3 on Kimi == Claude baseline: 2/3 find, gold-seed PoC, 10/10 MEDIUM, reattack reproduced, scorecard exit 0 (`targets/dvra3-parser/README.md`) |
 | 5 | AI-agent profile | contracts/evidence/runtime + lab-adapter pack; wired e2e + tool-level mechanism replay 3/3 (W63); 471 tests ✅ |
 | 6 | Recall engineering | W64 multi-candidate find loop shipped (per-candidate grading/dedup/judge); W65 guard-inventory prompt discipline; effectiveness measured by the 3-lens × 2-model kimi-code campaign — pending |
+| 7 | Second model backend | ✅ ZCode (GLM): app-server shim + adapter + image + routing (ADR-002 R1–R9); full canary stream (find → grade → judge → report → aggregate) validated under gVisor |
 
 ## License and attribution
 

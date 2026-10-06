@@ -16,8 +16,11 @@ This repo has two halves:
   capability-routed detectors (rust: Miri/ASan/panic/hang + cargo-fuzz;
   cpp: ASan), executes target code, needs the sandbox (see
   `docs/security.md` and `docs/agent-sandbox.md`). Agents run as `kimi -p`
-  processes inside per-target gVisor containers; the backend contract is
-  pinned in `docs/adr/ADR-001-agent-backend-kimi.md`.
+  processes inside per-target gVisor containers (Kimi backend, contract
+  pinned in `docs/adr/ADR-001-agent-backend-kimi.md`), or as ZCode CLI
+  app-server processes behind a node shim (Zcode/GLM backend, contract in
+  `docs/adr/ADR-002-agent-backend-zcode.md`) — selected at runtime with
+  `REPROOF_AGENT_BACKEND=kimi|zcode`.
 
 Docs for each topic are in `docs/`; targets are in `targets/` (`canary` is
 the fast cpp smoke test, `rust-canary` the rust one). The pipeline is
@@ -44,6 +47,10 @@ Each subcommand's flags: `reproof <cmd> --help`. Watching a run, resume-on-error
 rate limits, dedup, reports, patches: `docs/pipeline.md`,
 `docs/troubleshooting.md`.
 
+For the Zcode/GLM backend set `REPROOF_AGENT_BACKEND=zcode` and export the
+`ZCODE_MODEL_NAME` / `ZCODE_MODEL_API_KEY` / `ZCODE_MODEL_BASE_URL` trio
+instead of the Kimi one (same env-only auth discipline).
+
 ## Tests
 
 `.venv/bin/python -m pytest tests/ -q` — unit coverage over the ported
@@ -61,16 +68,24 @@ done by a Kimi session gets
 
     Co-authored-by: kimi-agent-bot <kimi-agent-bot@users.noreply.github.com>
 
-The noreply address resolves to a GitHub account, so co-authored commits
-show up in the contributors graph. Don't rewrite published history to add
-trailers retroactively — the convention applies to new commits.
+and work done by a ZCode (GLM) session gets
+
+    Co-authored-by: ZCode <noreply@z.ai>
+
+The kimi noreply address resolves to a GitHub account, so co-authored
+commits show up in the contributors graph. Don't rewrite published history
+to add trailers retroactively — the convention applies to new commits.
 
 ## Gotchas
 
-- **The agent backend is Kimi Code CLI 2.1.1** (`reproof/agent_image.py:KIMI_CODE_VERSION`),
+- **The default agent backend is Kimi Code CLI 2.1.1** (`reproof/agent_image.py:KIMI_CODE_VERSION`),
   driven headless as `kimi -p <prompt> --output-format stream-json` with a
   generated agent Markdown file (`--agent-file` carries the system prompt
   and tool allowlist; first attempt only — resumes use `--session <id>`).
+  The Zcode backend (`reproof/agent_zcode*.py`, ADR-002) routes through
+  `reproof/agent_backend.py` to the same stage contract; its quirks
+  (no budget knob, bidirectional frames, `workspaceId` must be a path) are
+  recorded in ADR-002 — read it before touching the shim.
 - **No stream sentinel.** The Kimi stream ends when the process exits;
   `meta/session.resume_hint` carries the session id. See ADR-001 for the
   full verified contract before touching `reproof/agent_kimi.py`.
