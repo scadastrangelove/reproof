@@ -407,3 +407,69 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
   disposition, isolate the load-bearing link in chain controls, and derive
   the true failing mechanism from runtime semantics before recording
   refuted vs lab-misconfiguration.
+
+## L86 — A version-applicability boundary is a hypothesis until you locate the file per-tag AND confirm it dynamically `[PROVEN]` · version-triage · extends L84/L85
+
+- **Evidence:** fix-verifying four Rocket.Chat CVEs, the static pass set the
+  CVE-2026-56845 boundary by grepping one develop path for the fix token
+  (`sanitizeFileName`) across tags — and concluded "contained since 8.0.7,
+  NVD under-lists it." Wrong. The feature had been relocated
+  (`apps/meteor/app/file/server/file.server.ts` on 8.0.x/8.5.x →
+  `apps/meteor/server/lib/media/file/` on develop), so the develop path 404s
+  on old tags and the grep read the 404 as "token absent." Re-probing the
+  correct per-tag path put `sanitizeFileName` first at **8.0.2** (absent in
+  8.0.1) — exactly NVD's list. A live replay clinched it: RC 8.0.1 served
+  `/custom-sounds/..%2f..%2f..%2f..%2fetc%2fpasswd` → `root:x:0:0:` (200),
+  8.0.2 blocks it. Same relocation trap was waiting on the SAML parser
+  (`app/meteor-accounts-saml/…` vs develop's `server/lib/saml/…`), avoided by
+  per-tag locate: 58066 fixed 8.6.1/8.5.2/7.10.14, vuln one patch below each.
+- **Why:** signature-grep over versions is correct (L84/"grep diffs not
+  messages"), but it silently fails across a refactor boundary, and a 404 is
+  not a negative. "NVD is a disclosure artifact, not containment history" is
+  a real pattern — but it must be *proven* per-case, not assumed; here NVD was
+  right and the clever-sounding "NVD under-lists" claim was the error. A
+  static boundary is a hypothesis; the file's real location at each tag and a
+  dynamic (or correct-path) check are what make it a conclusion.
+- **Change:** scan-extras/version-triage: locate the file at each tag via
+  `gh api repos/<o>/<r>/git/trees/<tag>?recursive=1` then grep; treat HTTP
+  404 as "unknown, re-locate" never "absent"; state the boundary as a
+  hypothesis and confirm the load-bearing tag dynamically when a lab exists.
+  Replay gotchas to encode: vendors ship deliberately-bricked releases
+  (RC `shouldBreakInVersion` throws in 8.0.0) and runtime-version floors
+  (RC 8.x needs MongoDB ≥ 7.0) — a non-booting tag is lab state, not a verdict.
+
+## L87 — Dynamic verification has a ladder of tiers; pick the highest the bug allows, and never conflate "vuln confirmed" with "RCE on today's runtime" `[PROVEN]` · verification-hygiene · extends L85/L86
+
+- **Evidence:** reproducing four RC CVEs dynamically landed each at a
+  *different* faithful tier, and forcing them all to "end-to-end RCE" would
+  have meant overclaiming. (1) **56845** — unauth HTTP: a single curl on a
+  running 8.0.1 = full end-to-end. (2) **H1 1049367** — real `path.join`+
+  `filenamify`, a canary escaping the export base pre-fix / contained
+  post-fix: complete behavioral delta at component level. (3) **58066** —
+  the full multi-element SAML auth-bypass must thread `getAssertion`'s
+  single-assertion + single-direct-child-signature checks; instead the
+  harness exercised the fix's *load-bearing predicate* on REAL signed XML
+  (real `xml-crypto`): pre-fix `checkSignature` accepts the signature no
+  matter which element identity is consumed; verbatim post-fix
+  `signatureCoversElement(sig, expectedId)` rejects the mismatch and accepts
+  the legit case. (4) **23917** — the verbatim pre-fix LDAP walk pollutes
+  `Object.prototype`, the 5.2.0 immutable rebuild does not; but the era RCE
+  gadget (`Object.prototype.env.NODE_OPTIONS` → child `--require`) did NOT
+  fire on Node 24, and probing showed Node 24 no longer inherits
+  `options.env` from the prototype. The pollution is real; the RCE gadget is
+  runtime-version-specific and hardened on current Node.
+- **Why:** a "vuln" is the attacker-reachable defect; an "RCE" also needs a
+  live gadget in the *deployed runtime*, which the runtime can close
+  independently of the app fix. Reporting "proto-pollution → RCE reproduced"
+  on Node 24 would be false even though the pollution reproduces perfectly.
+  For validate≠bind / crypto-wrapping classes, the fix's predicate on a real
+  signed artifact is the faithful, assemblable unit when full protocol
+  assembly is impractical — and it isolates exactly the load-bearing link.
+- **Change:** verification tiers (sharpens L85/AIF13): pick the highest tier
+  the bug economically allows — end-to-end > component-behavioral >
+  fix-predicate-on-real-inputs > pollution/delta — and *label which one*.
+  Separate "vulnerability confirmed" from "RCE on runtime X"; when a gadget
+  fails, probe whether the runtime hardened it (a closed gadget is a runtime
+  defense finding, not a refutation of the vuln). Reusable primitive: for
+  signature/assertion-wrapping bugs, drive the real crypto lib and assert the
+  fix predicate accepts legit / rejects the unbound case.
