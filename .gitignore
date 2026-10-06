@@ -20,3 +20,9 @@ targets/open-webui/
 targets/ai-agent-research-targets.md
 targets/kimi-code/
 targets/kimi-code*/
+
+# Security research working set (CVE writeups, exploit reconstructions,
+# nuclei/snort detections) — published selectively, never pushed with the
+# repo. Covers the top-level dir and the accidental-zip pattern.
+/research/
+/research.zip
