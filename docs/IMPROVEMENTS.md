@@ -129,3 +129,29 @@ tested.
   2-model rerun surfaced permission-deny-fail-open (config rules parsed but never loaded — confirmed
   by code: zero addRules callers) and a local.toml boundary-extension candidate — from the BLIND lens,
   driven by the checkpoint, while the dedicated lens added nothing new (L74).
+- **W68 — stakes-calibrated verify over ALL candidates (drop the severity bar)** `[L79][pipeline]`.
+  The ZCode dual campaign: our variant-scan panel-verified only high-or-≥2-vote candidates
+  (23/44) and the workflow-draft symlink write — confirmed HIGH 3/3 by the parallel campaign's triage —
+  sat in our unverified raw pool. Finder severity is a prior; gating verification on it strands exactly
+  the under-rated findings. Change the skill/panel protocol: every deduped candidate gets verified;
+  skeptic count allocated by claimed stakes (3 for HIGH/disputed, 2 MED, 1 LOW) instead of a severity
+  filter. **Done-when:** the variant-scan skill text and any panel orchestration code express
+  votes-by-stakes over the full deduped set, no "below-bar raw pool" tier remains, and a re-run of the
+  ZCode register through the updated flow verifies ≥40 of its candidates.
+- **W69 — refutations must record tested forms (scoped, never class-level)** `[L76][prompts]`.
+  The parallel campaign's CVE lenses wrote "bash parser fails closed on obfuscation" off a
+  sample of forms; the backslash-escaped-flag desync in that same parser is live and PoC-verified.
+  A class-level refutation closes the class for every later lens. Change the CVE-pass seed handling
+  and verifier output format: a refutation entry carries `tested_forms[]` + `untested_forms[]` (or an
+  explicit coverage argument), and "class X absent" without enumeration is a format error. **Done-when:**
+  the variant-scan/cve-pass prompt + FIND/refute schemas require the split, and at least one campaign
+  artifact shows a scoped refutation with a reopened untested form.
+- **W70 — env-provenance rule for env-key findings** `[L77][detection]`. The repo-`.env`
+  escalation family (proxy/CA MITM, login OAuth redirect, binary hijack) turns entirely on WHO can set
+  the variable — a property of the loader chain (`loadCliDotenv` walk-up), invisible from the sink;
+  without a loader read the family dies as "operator-trusted env" FPs. Add to the ai-agent FP-rules
+  (AIF set): an env-key candidate is not triage-ready until provenance vs the loader chain (dotenv
+  walk-up / config file / shell) is cited; symmetrically, "trusted operator config" exclusions demand
+  the loader citation. **Done-when:** the rule is in `profiles/ai-agent/fp-rules.txt` (or the triage
+  skill's exclusion list) with the ZCode V4/V5/V6 loader example, and the triage checklist prompts for
+  loader provenance on env-key candidates.
