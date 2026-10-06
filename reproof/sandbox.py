@@ -27,7 +27,7 @@ import os
 import subprocess
 from typing import Iterator
 
-from . import agent_image, docker_ops
+from . import agent_backend, agent_image, agent_zcode, agent_zcode_image, docker_ops
 
 RUNTIME_ENV = "REPROOF_AGENT_RUNTIME"
 PROXY_ENV = "REPROOF_EGRESS_PROXY"
@@ -74,7 +74,10 @@ def agent_container(
     target code via ``exec_sh`` and don't need any egress, so don't give them
     any — under ``--dangerously-no-sandbox`` the default falls back to
     ``bridge``, and a binary fed an attacker-crafted PoC shouldn't get that."""
-    img = agent_image.ensure(target_tag)
+    if agent_backend.current_backend() == "zcode":
+        img = agent_zcode_image.ensure(target_tag)
+    else:
+        img = agent_image.ensure(target_tag)
     container = docker_ops.run(
         img,
         name=name,
@@ -98,9 +101,22 @@ def container_env(auth: dict[str, str] | None) -> dict[str, str]:
     the egress proxy is injected (both upper- and lower-case forms) when the
     sandbox is active so the in-container CLI can reach the model API."""
     e = dict(auth or {})
+    if agent_backend.current_backend() == "zcode":
+        # ADR-002 R4/R5: the paired provider-config envs (mandatory together
+        # or the CLI registry refuses to start) — builtin catalog baked into
+        # the image, personal overlay written per-run by agent_zcode.
+        e["ZCODE_BUILTIN_PROVIDER_CONFIG_FILE"] = (
+            agent_zcode_image.BUILTIN_IN_IMAGE)
+        e["ZCODE_PERSONAL_PROVIDER_CONFIG_FILE"] = (
+            agent_zcode.PROVIDER_CONFIG_PATH)
     if p := proxy():
         e["HTTPS_PROXY"] = p
         e["https_proxy"] = p
+        if agent_backend.current_backend() == "zcode":
+            # The zcode CLI strips classic HTTP(S)_PROXY at startup and
+            # honors only ZCODE_HTTP_PROXY — without it the model fetch goes
+            # direct and dies in the egress-only sandbox network (EAI_AGAIN).
+            e["ZCODE_HTTP_PROXY"] = p
     else:
         # No sandbox egress proxy (e.g. --dangerously-no-sandbox). Forward an
         # outbound HTTP(S) proxy from the host env into the agent container so

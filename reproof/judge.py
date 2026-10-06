@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from . import sandbox
-from .agent_kimi import run_agent, parse_xml_tag, AgentResult
+from .agent_backend import run_agent, parse_xml_tag, AgentResult
 from .artifacts import JudgeVerdict
 from .profiles import get_profile
 

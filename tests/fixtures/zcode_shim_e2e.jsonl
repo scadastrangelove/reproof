@@ -1,0 +1,10 @@
+{"type":"session","sessionId":"sess_6549efee-9cb2-4dbc-8c3d-88ef89a06773"}
+{"type":"turn","kind":"turn-started","turnId":"turn_282379aa-fb7f-40c1-a8d7-f89102f2a703"}
+{"type":"row","kind":"turnHeader","rowId":1,"turnId":"msg_muvmfgxp_a","state":"running","text":""}
+{"type":"row","kind":"userInput","rowId":2,"turnId":"msg_muvmfgxp_a","state":null,"text":"Run the echo tool, then reply with the final word."}
+{"type":"row","kind":"toolCall","rowId":3,"turnId":"msg_muvmfgxp_a","state":null,"text":""}
+{"type":"turn","kind":"turn-completed","turnId":"turn_282379aa-fb7f-40c1-a8d7-f89102f2a703"}
+{"type":"row","kind":"assistantText","rowId":4,"turnId":"msg_muvmfgxp_a","state":"streaming","text":""}
+{"type":"row","kind":"assistantText","rowId":4,"turnId":"msg_muvmfgxp_a","state":"complete","text":"DONE-FINAL"}
+{"type":"row","kind":"turnHeader","rowId":1,"turnId":"msg_muvmfgxp_a","state":"completedSuccess","text":""}
+{"type":"done","turnHeaders":1}

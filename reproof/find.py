@@ -10,7 +10,7 @@ import re
 import time
 
 from . import docker_ops, sandbox
-from .agent_kimi import run_agent, parse_xml_tag, normalize_message_text, AgentResult
+from .agent_backend import run_agent, parse_xml_tag, AgentResult, normalize_message_text
 from .artifacts import CrashArtifact
 from .config import TargetConfig
 from .profiles import get_profile

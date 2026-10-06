@@ -16,7 +16,7 @@ import os
 import time
 
 from . import docker_ops, sandbox
-from .agent_kimi import run_agent, parse_xml_tag, AgentResult
+from .agent_backend import run_agent, parse_xml_tag, AgentResult
 from .artifacts import CrashArtifact, ReportVerdict
 from .config import TargetConfig
 from .profiles import get_profile

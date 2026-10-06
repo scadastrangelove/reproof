@@ -33,28 +33,52 @@ NO_AUTH_MSG = (
 
 _ENV_KEYS = ("KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL")
 
+# zcode backend (ADR-002): same trio under ZCODE_MODEL_*; the key lands in the
+# per-run personal-overlay file inside the ephemeral container (accepted
+# deviation from kimi's env-only indirection — see ADR-002 "Adapter
+# implications").
+_ENV_KEYS_BY_BACKEND = {
+    "kimi": _ENV_KEYS,
+    "zcode": ("ZCODE_MODEL_NAME", "ZCODE_MODEL_API_KEY", "ZCODE_MODEL_BASE_URL"),
+}
+
+
+_FRIENDLY = {"kimi": "Kimi", "zcode": "Zcode"}
+
+
+def _backend_auth() -> tuple[tuple[str, ...], str]:
+    """(env keys, friendly name) for the current backend."""
+    from .agent_backend import current_backend  # local import: avoid cycles
+    backend = current_backend()
+    if backend not in _ENV_KEYS_BY_BACKEND:
+        backend = "kimi"
+    return _ENV_KEYS_BY_BACKEND[backend], _FRIENDLY[backend]
+
 
 def resolve_auth_env() -> dict[str, str] | None:
-    """Resolve auth for the in-container ``kimi -p`` process.
+    """Resolve auth for the in-container agent process (backend-aware).
 
     Returns the env dict to set on the agent container, or None with a
-    specific diagnostic on stderr. All three KIMI_MODEL_* vars are required:
-    a key without a base URL (or vice versa) is a misconfiguration the CLI
-    would otherwise report only after the container is already up.
+    specific diagnostic on stderr. All three <KIMI|ZCODE>_MODEL_* vars are
+    required: a key without a base URL (or vice versa) is a misconfiguration
+    the CLI would otherwise report only after the container is already up.
     """
-    vals = {k: os.environ.get(k) for k in _ENV_KEYS}
+    keys, name = _backend_auth()
+    prefix = keys[0].split("_MODEL_")[0]
+    vals = {k: os.environ.get(k) for k in keys}
     present = {k: v for k, v in vals.items() if v}
     if not present:
         return None
-    missing = [k for k in _ENV_KEYS if k not in present]
+    missing = [k for k in keys if k not in present]
     if missing:
-        print(f"error: partial Kimi auth — set but missing: "
+        print(f"error: partial {name} auth — set but missing: "
               f"{', '.join(missing)}", file=sys.stderr)
         return None
-    parsed = urlparse(present["KIMI_MODEL_BASE_URL"])
+    base = present[f"{prefix}_MODEL_BASE_URL"]
+    parsed = urlparse(base)
     if parsed.scheme != "https" or not parsed.hostname:
-        print(f"error: KIMI_MODEL_BASE_URL must be an https URL, got "
-              f"{present['KIMI_MODEL_BASE_URL']!r}", file=sys.stderr)
+        print(f"error: {prefix}_MODEL_BASE_URL must be an https URL, got "
+              f"{base!r}", file=sys.stderr)
         return None
     return dict(present)
 
@@ -62,16 +86,18 @@ def resolve_auth_env() -> dict[str, str] | None:
 def required_egress_hosts() -> list[str]:
     """host:port entries the current provider needs on the proxy allowlist.
 
-    Derived from KIMI_MODEL_BASE_URL so the egress preflight follows the
-    configured endpoint (managed service, Moonshot platform, or an
+    Derived from <KIMI|ZCODE>_MODEL_BASE_URL so the egress preflight follows
+    the configured endpoint (managed service, model platform, or an
     OpenAI-compatible gateway) instead of hardcoding a vendor host.
     """
-    base = os.environ.get("KIMI_MODEL_BASE_URL")
+    keys, _name = _backend_auth()
+    prefix = keys[0].split("_MODEL_")[0]
+    base = os.environ.get(f"{prefix}_MODEL_BASE_URL")
     if not base:
-        sys.exit("error: KIMI_MODEL_BASE_URL unset — cannot derive egress host")
+        sys.exit(f"error: {prefix}_MODEL_BASE_URL unset — cannot derive egress host")
     parsed = urlparse(base)
     if parsed.scheme != "https" or not parsed.hostname:
-        sys.exit(f"error: KIMI_MODEL_BASE_URL must be an https URL, got {base!r}")
+        sys.exit(f"error: {prefix}_MODEL_BASE_URL must be an https URL, got {base!r}")
     return [f"{parsed.hostname}:{parsed.port or 443}"]
 
 
