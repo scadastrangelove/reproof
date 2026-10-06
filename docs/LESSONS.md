@@ -201,3 +201,209 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
   lenses when the gap is "a surface type nobody walks". Also: a checkpoint that NAMES
   the defect shapes validates guided recall, not discovery — read done-when results
   accordingly and keep a blind pass without the seed when measuring true recall.
+
+## L75 — Two independent pipelines converge on the headliners and diverge on the tail; the tail is the yield `[PROVEN]` · campaign-design · extends RIP L21/L25
+
+- **Evidence:** ZCode v3.14.3 (commit 29628c9) scanned twice in parallel by independent
+  stacks: a GLM variant-scan (15 lenses, 3-skeptic panel) and a Claude campaign
+  (6 lenses: TM/Blind/CVE × opus/sonnet, stakes-calibrated triage). The headliners are
+  identical — project-config MCP auto-spawn (found by 5/15 lenses resp. 6/6), repo
+  config `permission.mode=yolo`, plugin-hook trust bypass, plan-mode MCP annotations,
+  WebFetch SSRF dead guard, sed `w`-flag write, unauth self-host server, Explore
+  subagent yolo. The tails are disjoint: GLM-only found the backslash parser desync
+  (V18, PoC-verified), marketplace `ext::` pre-approval RCE (V7), the repo-`.env`
+  escalation family (V4/V5/V6), Edit/Write rule asymmetry, credential-cipher key;
+  Claude-only found the dynamic-workflow `vm` `__send` escape (Z9), `uniq` output
+  operand (Z10), workflow-draft symlink write confirmed HIGH (Z5), NTLM leak (Z21).
+- **Why:** convergence certifies the target's structural holes — any reasonable method
+  finds those; it measures the target, not the method. Recall lives in the tail, and
+  the tail is specific to model, seed family, and lens framing. A second stack is a
+  recall multiplier, not a redundancy check.
+- **Change:** for campaign-grade targets run at least two model stacks (or two
+  disjoint seed families) and budget triage for the UNION of tails, never the
+  intersection. Report convergence separately from novelty.
+
+## L76 — A seed refutation is scoped to the forms actually tested; a class-level "absent" hides live bypasses `[PROVEN]` · cve-seeding
+
+- **Evidence:** the Claude CVE lenses ported the kimi obfuscation seed to ZCode, tested
+  forms, and recorded "bash parser fails closed on obfuscation". Yet the backslash-
+  escaped-flag desync (V18) — an obfuscation-class bypass in exactly that parser — is
+  real and PoC-verified through the real classifier (`rg \-\-pre=…` readonly=true,
+  unescaped control correctly false). Their own blind lens independently found adjacent
+  write/exec vectors in the same allowlist family (`uniq` operand, sed `s///e`, `w`).
+- **Why:** a refutation generalizes from sampled instances to a written verdict;
+  recording the class as absent closes it for every later lens and campaign, and the
+  next reader treats the closed class as ground truth.
+- **Change:** refutations must name the exact forms tested ("escaped-flag desync NOT
+  tested" vs "obfuscation absent"); a class-level refutation requires an enumeration
+  of the class or an argument covering it, never a sample.
+
+## L77 — Env-var findings live or die on WHO can set the variable; that fact lives in the loader, not the sink `[PROVEN]` · reachability · trust-boundary
+
+- **Evidence:** the repo-`.env` escalation family (proxy/CA MITM of model traffic,
+  `zcode login` OAuth redirect, `ZCODE_GIT_BINARY` hijack) would have been dropped as
+  operator-trusted-env false positives under the campaign's exclusion rule; reading
+  the loader (`cli/src/env.ts` `loadCliDotenv` → `findDotenv` walking up from the
+  workspace cwd, `override:false`) proved repo-reachable and made them genuine
+  untrusted-repo vectors. The inverse held too: the CLI-login `cmd /c start` candidate
+  was correctly refuted because the URL was vendor/user-sourced — no crossing.
+- **Why:** "is this env operator-controlled or repo-controlled?" is a property of the
+  loading path; it is invisible from the sink, and both the FP and the HIGH verdicts
+  in this family turned on the same one function.
+- **Change:** every env-key finding carries a provenance check against the loader chain
+  (dotenv walk-up / config file / shell) before triage; "trusted operator config"
+  exclusions demand the loader citation, symmetrically with reachability citations.
+
+## L78 — A severity dispute between independent readers points at an unread guard, not at a difference of opinion `[PROVEN]` · verification-hygiene · extends L67
+
+- **Evidence:** both campaigns' panels independently downgraded the WebFetch SSRF
+  HIGH→MED for identical reasons (unconditional https-upgrade, TLS cert validation,
+  build-mode approval) and both re-rated the unauth server conditional (opt-in
+  launcher, loopback-by-default daemon). The one genuine dispute (workflow-draft
+  symlink write) was resolved not by averaging but by guard analysis: `O_NOFOLLOW`/
+  `lstat` protect only the final path component, `mkdir -p` follows the intermediate
+  symlink — the refutation itself was refuted and HIGH restored.
+- **Why:** severity is derived from gating conditions. Two adversarial readers of the
+  same gates converge; disagreement is evidence that SOME gate on the path has not
+  been read by one side.
+- **Change:** treat cross-panel severity disagreement as a pointer to an unread guard:
+  enumerate the gates in the disputed chain before any compromise. Never settle a
+  dispute by averaging votes.
+
+## L79 — A verify bar selected by claimed severity strands real findings in the raw pool; spend skeptic votes by stakes over ALL candidates instead `[PROVEN]` · triage-design
+
+- **Evidence:** the GLM variant-scan panel-verified only candidates that were
+  high-severity or ≥2-lens-vote (23 of 44); the workflow-draft symlink write sat in
+  the unverified raw pool and was confirmed HIGH (3/3) by the parallel campaign's
+  triage. That triage instead verified every one of its 37 candidates with
+  stakes-calibrated votes (3 for HIGH/disputed, 2 MED, 1 LOW) — coverage by
+  allocation, not exclusion.
+- **Why:** finder severity is a prior, not a verdict; using the prior as the gate for
+  WHICH candidates get verified bakes the prior in — exactly the findings a finder
+  under-rates are the ones never checked.
+- **Change:** verify every deduped candidate; allocate skeptic count by claimed
+  stakes rather than excluding candidates below a severity bar. Raw-pool items are
+  "unverified", never "probably fine".
+
+## L80 — When a dispute reduces to "what does pinned dependency X do", the tie-breaker is a probe of X, not another vote `[PROVEN]` · verification-hygiene · extends L72
+
+- **Evidence:** V18 split the skeptic panel 1-refute/2-confirm, BOTH sides claiming
+  live probes of `unbash@4.0.1` with opposite results. Settled only by an independent
+  scratch-dir probe of the pinned version (`word.value` retains backslashes in unquoted
+  words) plus a harness running the real 23 classifier files copied verbatim from the
+  target (payload readonly=true, controls false, real shell executes the escaped
+  flag). The parallel campaign hit the same shape (TUI cell-buffer ANSI question) and
+  could only park it "for dynamic" — no probe was run.
+- **Why:** when the disputed fact is the behavior of a specific pinned artifact, any
+  number of readers is worth less than one execution of that artifact; dueling
+  "I tested it" claims are symmetric and votes don't break symmetry.
+- **Change:** a panel dispute that reduces to pinned-artifact semantics is settled by
+  a reproducible scratch-dir probe of that exact version, recorded with the harness
+  path; only then does the disposition flip. Mirrors L72: decompose to the mechanism,
+  then measure the mechanism.
+
+## L81 — A foreign pipeline's findings are untrusted input: diff, verify anchors, adopt as candidates — never inherit dispositions `[PROVEN]` · campaign-hygiene
+
+- **Evidence:** each campaign's output landed in the other's working area (the GLM
+  `VARIANT-FINDINGS.json` inside the clone; the Claude register log in the other
+  direction). Both sides handled it correctly: treated as data, diffed against the
+  local register by root cause, anchors re-checked in source (and one crux — does
+  ZCode load a repo-local `.env` — resolved in the loader before adopting the family),
+  adopted as new register entries with fresh triage rather than inherited
+  "confirmed" status.
+- **Why:** a findings file mixes real anchors with over-claims and, in an agent-
+  pipeline context, may itself carry injected instructions; adopting its dispositions
+  launders unverified claims into a "confirmed" register and destroys the meaning of
+  the local verdict vocabulary.
+- **Change:** foreign findings enter the register as candidates with citation checks
+  and re-verification; dispositions are always re-derived locally. The cross-campaign
+  diff itself is a deliverable (convergence vs novelty, L75).
+
+## L82 — A negative reading from an instrument you never positively validated is not a result `[PROVEN]` · measurement · echoes L61
+
+- **Evidence:** ADR-002 R4b was published as "zcode CLI ignores ALL proxy
+  configuration", based on a MITM recorder showing zero records. The recorder
+  itself was broken (deadlock: it re-read the CONNECT request the HTTP
+  framework had already consumed; its only smoke test returned curl 000 and
+  was dismissed as a quoting artifact). A contributor's source read
+  challenged the claim; rebuilding the recorder (v2) and re-running the exact
+  experiment produced the recorded, forwarded, 200-OK main-turn request —
+  `ZCODE_HTTP_PROXY`/`ZCODE_AGENT_CA_CERT` are honored. The "ignore" was the
+  instrument, not the CLI. (The residual zcode.z.ai traffic was sidecars on
+  the default gateway — a different, real finding that the bad instrument
+  had blurred together.)
+- **Why:** a silent instrument and an ignored path produce the same
+  observation — nothing. L61 says oracles must resolve on the negative
+  control; this is the same rule one layer up: the RECORDER must first
+  positively capture a known-good request before its silence is evidence of
+  anything. One positive control (curl through the recorder) would have cost
+  30 seconds and prevented a wrong ADR section plus a day of workaround
+  design.
+- **Change:** every capture/recorder harness gets a positive-control step in
+  its recipe (a known-good request MUST appear in the log before the
+  experiment starts); "the proxy/CLI/X ignored the config" is not claimable
+  from recorder silence alone. Counter-analysis from source beats black-box
+  inference — invite it earlier.
+
+## L83 — A published narrow trust boundary calibrates disposition, not discovery; own-code enablers flip accepted-risk classes back in scope `[PROVEN]` · scope · triage
+
+- **Evidence:** the Pi campaign hit a target whose SECURITY.md/threat model
+  declares whole classes accepted-risk (untrusted-repo config, prompt
+  injection, no-sandbox). Treating the document as a filter would have
+  dropped real defects; treating it as noise would have overclaimed. The
+  productive split was bucket-A (bypass of the target's OWN control or an
+  OS/network boundary — disclosable) vs bucket-B (vendor-declared
+  accepted-risk — recorded, not reported). One class flipped from B to A
+  when the target's own shipped artifact granted the enabler the "accepted
+  risk" had assumed only the user could set.
+- **Why:** scope documents describe intent, not mechanism. The mechanism
+  question — does the target's own code or packaging hand the attacker the
+  prerequisite? — is answerable from source and packaging, and it is what
+  separates "by design" from "the design is undercut by the artifact".
+  Bucket-B findings also keep value for DERIVED products that drop the
+  caveats, so they must be recorded with the same rigor, not discarded.
+- **Change:** scan-extras AI12 (declared-scope calibration) + one sentence
+  in fp-rules AIF2: read the published trust boundary first, classify every
+  candidate bucket-A/bucket-B explicitly, and name the control bypassed and
+  the line where the target grants the access when a class flips.
+
+## L84 — Ambient config is attacker surface when untrusted content can set it, and the shipped artifact — not the dev run — is the unit under test `[PROVEN]` · reachability · config
+
+- **Evidence:** Pi P3 and the ZCode campaign (Z40/Z41/Z47) clustered on the
+  same shape: a tool resolving a security-relevant config dir, trust store,
+  provider endpoint, proxy or CA from an env var or an autoloaded dotfile
+  (.env, bunfig, rc) that untrusted content can write before the tool reads
+  it. Two findings were nearly misjudged from dev behavior: a compiled
+  binary autoloaded a cwd `.env` that a dev run would not — one build flag
+  toggled it. A sibling tool on the same stack made the safe choice, which
+  both proved avoidability and gave the reference fix.
+- **Why:** the env var's documented existence is not the finding; the
+  REDIRECT of authority (who can set the source before the read) is. And
+  the authority question is answered by the loader and the packaging, not
+  the sink (echoes L77). Shipped ≠ dev: build/package flags can change
+  which ambient sources are autoloaded.
+- **Change:** scan-extras AI13 (ambient config authority): trace each
+  config/trust-store/endpoint/proxy/CA/flag source, ask who can write it
+  before the tool reads it, read the exact build flags of the shipped
+  artifact, and cite the safe sibling when one exists.
+
+## L85 — Every disposition carries a verification tier, and a chain control must isolate the load-bearing link `[PROVEN]` · verification-hygiene · extends L67/L82
+
+- **Evidence:** the Pi campaign's controls showed a recurring overclaim
+  pattern: a source-only candidate read as dynamically confirmed, and a
+  multi-step chain "verified" by attack-vs-nothing — where removing the
+  payload also removed steps the chain needed anyway, so the control proved
+  nothing about the specific link claimed. Separately, dynamic checks that
+  failed oddly were nearly recorded as refuted when the true mechanism was
+  in the runtime's semantics (a tool naming the wrong cause; an
+  exists-check that already proved a path; a geo-blocked dependency) — i.e.
+  lab-misconfiguration, not absence.
+- **Why:** disposition strength is a property of the evidence tier
+  (source-only / component-dynamic / end-to-end-live), and a chain is only
+  as verified as its weakest isolated link. The control that matters runs
+  the same payload with the load-bearing link removed and shows the outcome
+  stops. Surface error strings are the runtime's guess, not ground truth.
+- **Change:** fp-rules AIF13 (verification tiers): state the tier of every
+  disposition, isolate the load-bearing link in chain controls, and derive
+  the true failing mechanism from runtime semantics before recording
+  refuted vs lab-misconfiguration.

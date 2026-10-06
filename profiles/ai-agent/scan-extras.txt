@@ -94,6 +94,34 @@ an enabled-by-default install with no integrity check. "No gate at this
 stage" is a lead, not a blank cell; verify which identity executes the
 final stage before claiming.
 
+AI12 — Declared-scope calibration (L83)
+The target may publish a deliberately narrow trust boundary (SECURITY.md,
+threat model, "out of scope" lists). Read it first and classify every
+candidate: bucket-A = a bypass of the target's OWN control or an OS/network
+boundary crossing (disclosable); bucket-B = a class the vendor declares
+accepted-risk (untrusted-repo config, prompt injection, no-sandbox). Report
+bucket-A; record bucket-B separately — it stays relevant to DERIVED products
+that drop the caveats (a thin closed wrapper that opens untrusted repos/web).
+A by-design, out-of-scope class flips to bucket-A when the target's own code
+or packaging grants the enabler the attacker needs — e.g. the shipped binary
+itself places attacker-controlled bytes on the path the "accepted risk"
+assumed only the user could set. Name the control bypassed and the line
+where the target grants the access.
+
+AI13 — Ambient config authority (L84)
+Security-relevant configuration resolved from the ambient environment is an
+attacker surface when untrusted content can set it. Trace where the tool
+reads a config dir, trust store, provider endpoint, proxy, CA, or feature
+flag from an env var or an autoloaded dotfile (.env, bunfig, rc), and ask
+who can write that source before the tool reads it — a cloned repo's .env,
+an inherited env var, a cwd-relative file. The SHIPPED artifact is the unit
+under test: read the exact build/package flags (a compiled binary may
+autoload a cwd .env a dev run would not; one flag toggles it) — shipped is
+not dev. When a sibling tool on the same stack makes the safe choice, cite
+it as the reference fix and as proof the flaw is avoidable. The redirect of
+a config-dir/trust-store/endpoint via an attacker-settable env var is the
+finding, not the env var's documented existence.
+
 Finding record
 Record component, security invariant and policy source; attacker capabilities;
 entry -> guards -> effect; dependencies and configuration; separate triggers;
