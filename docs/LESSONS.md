@@ -473,3 +473,77 @@ Change. Actionable follow-ups live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
   defense finding, not a refutation of the vuln). Reusable primitive: for
   signature/assertion-wrapping bugs, drive the real crypto lib and assert the
   fix predicate accepts legit / rejects the unbound case.
+
+## L88 — An argv-list negative refutes shell metachars, not code execution; scope execution negatives to the channel actually tested `[PROVEN]` · negatives-hygiene · extends L76
+
+- **Evidence:** a dual campaign on a production control-plane — the GLM lenses
+  recorded "the server-side execution engine always marshals argv lists, no
+  `shell=True`" as a clean command-execution negative; the parallel Claude
+  campaign's top finding was RCE on the same engine via a different channel —
+  user-controlled variable *content* plus run-target selection pointing the
+  execution at the server itself — with zero shell metacharacters involved.
+- **Why:** an execution engine has several code-execution channels: argv
+  marshalling, variable *content*, inventory/target selection, templating
+  (Jinja/YAML), and lint/syntax paths. A negative tested on one channel reads
+  as "no execution at all" when the wording only supports "no shell-metachar
+  injection at the argv layer". Same disease as L76, on the negative side.
+- **Change:** every command-execution negative must enumerate the engine's
+  other exec channels or scope its wording to the channel tested; sweep
+  prompts list the channels explicitly (argv / var-content / target / template
+  / syntax-check) so "clean" is per-channel, never global.
+
+## L89 — Designed-in dynamic SQL is a first-class SQLi sink the interpolation sweep never sees; enumerate intended-eval features before filing the negative `[PROVEN]` · sast-gaps
+
+- **Evidence:** the GLM SQLi sweep verified every `raw()`/`cursor()` site as
+  parameterized and filed "no SQLi"; Claude's CVE lens found `cur.execute()`
+  of a stored user-authored *expression field* — intended-eval SQL executed
+  verbatim, auto-firing during a setup flow.
+- **Why:** pattern-hunting request-data→string-interpolation finds nothing in
+  features whose PURPOSE is executing user-authored logic: they don't
+  interpolate, they execute by design. The sweep's clean result is true and
+  useless at once.
+- **Change:** a SQLi sweep starts by enumerating intended-eval surface (model
+  fields named expression/query/filter/dsl/template, any `execute()` of
+  column data, ORM `extra()` fed from stored values) and audits each as
+  designed attack surface; "parameterized everywhere" without that
+  enumeration is not a reportable negative.
+
+## L90 — A threat model that names actors but never turns them into actor-pair access questions misses the app's primary bug family; missing global authz defaults are a root-cause finding, not a footnote `[PROVEN]` · threat-model-operationalization · extends L67
+
+- **Evidence:** the GLM TM lens built the full actor model for the same
+  target (permission groups, ownership relations, per-resource ACLs) and
+  still filed **zero** cross-tenant findings; the Claude campaign's systemic
+  root cause — no global default permission class, no tenant-scoping base
+  mixin anywhere — produced the largest family in the merged register
+  (cross-organization object access across several API view families).
+- **Why:** an actor in a table is inventory, not inquiry. A multi-tenant web
+  app's dominant bug class is per-object authorization, and it surfaces only
+  when each actor-pair × object-class becomes an explicit "can A read/write
+  B's object?" question — plus a framework-level check (what is the default
+  permission/authn class framework-wide? is there a scoping base mixin at
+  all?), because every view that forgets manual scoping inherits the
+  framework's allow-any-by-default equivalent.
+- **Change:** the TM lens must emit a per-actor-pair access matrix before
+  hunting, then sweep view classes for missing queryset-scoping against it;
+  absent global authz defaults are filed as the FIRST finding and the IDOR
+  family is enumerated under it.
+
+## L91 — Same-tree multi-model campaigns have complementary class-blindness, not just tail divergence; merges must diff blind CLASSES, not only findings `[PROVEN]` · campaign-design · extends L75/L81
+
+- **Evidence:** the merged dual-campaign register (GLM-5.3+flash vs
+  opus+sonnet): headliner overlap ~6 items, but each side's Tier-1 contained
+  families the other never touched — GLM clean on the web-class authz family
+  (zero cross-tenant finds) while deep on packaging/CLI/config (a privileged
+  path overwrite via a config variable, CLI wrapper injections, a debug-mode
+  authz bypass, a world-writable runtime directory); Claude the exact
+  inverse. Asymmetric corrections ran both ways: a session-forgery headliner
+  died on a where-are-sessions-stored detail, and a key-reuse observation
+  widened the surviving finding.
+- **Why:** L75 says pipelines converge on headliners and diverge on tails;
+  the divergence is not noise — it is per-model/per-prompt *class coverage*.
+  Merging only findings hides which bug families each side never examined, so
+  the merged product inherits both blind spots silently.
+- **Change:** dual-campaign merges get a coverage-diff section (families each
+  side never touched, with the reason), and those families become the seed
+  set for the next lens round; foreign-findings discipline (L81) applies to
+  the coverage claims too.
