@@ -26,3 +26,7 @@ targets/kimi-code*/
 # repo. Covers the top-level dir and the accidental-zip pattern.
 /research/
 /research.zip
+
+# /triage working state — sharded findings, votes, phase progress: campaign
+# data, never commit.
+.triage-state/
