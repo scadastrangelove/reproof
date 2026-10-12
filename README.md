@@ -10,6 +10,12 @@ and attacked once more after patching.
 The name is the method: **repro**duction + **proof**. A secondary reading is
 intentional — the pipeline issues *reproofs* to unproven agent claims.
 
+> **Coordinated-disclosure tracker:** [DISCLOSURES-PUBLIC.md](DISCLOSURES-PUBLIC.md) —
+> every campaign target reported through this pipeline (AI coding agents,
+> TR-069/CWMP CPE agents + gSOAP, TR-069 ACS servers, broadband-CPE
+> firmware), with channel/advisory-ID and status only; no vulnerability
+> detail until a fix ships or the embargo lapses.
+
 - Multi-language from day one (Rust, C/C++, kernel, mobile, ai-agent profiles) —
   not a Rust-only tool.
 - Model-backend-pluggable; the reference backend is
